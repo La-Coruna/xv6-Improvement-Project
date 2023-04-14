@@ -36,6 +36,13 @@ int main(int argc, char *argv[]) {
   int pid;
   int num_children = 6;
 
+  myfunction("Hello xv6!");
+  yield();
+  getLevel();
+  setPriority(2,2);
+  schedulerLock(3);
+  schedulerUnlock(3);
+
   for (int i = 0; i < num_children; i++) {
     pid = fork();
     if (pid < 0) {
