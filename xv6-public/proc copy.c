@@ -6,9 +6,6 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
-#define bool int
-#define true 1
-#define false 0
 
 struct {
   struct spinlock lock;
@@ -91,9 +88,6 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->level = 0; // process가 처음 생성될 때는 lv0으로 시작.
-  p->priority = 3;
-  p->ticks=4;
 
   release(&ptable.lock);
 
@@ -317,68 +311,6 @@ wait(void)
   }
 }
 
-// execute Process.
-// !ptablelock을 얻은 후에만 호출되어야 함
-void execProc(struct proc *p){
-  struct cpu *c = mycpu();
-  //TODO: 내부를 roundrobin으로 구현해야함.
-  // Switch to chosen process.  It is the process's job
-  // to release ptable.lock and then reacquire it
-  // before jumping back to us.
-  c->proc = p;
-  switchuvm(p);
-  p->state = RUNNING;
-
-  swtch(&(c->scheduler), p->context);
-  switchkvm();
-
-  //TODO: ticks 줄이기
-  p->ticks -= 1;
-  if(p->ticks == 0){
-    p->level++;
-  }
-
-  // Process is done running for now.
-  // It should have changed its p->state before coming back.
-  c->proc = 0;
-}
-
-// round-robin scheduling with ptable for process at 'procLv'
-// !ptablelock을 얻은 후에만 호출되어야 함
-void rrScheduler(struct proc *p, int procLv){
-  for(; p < &ptable.proc[NPROC]; p++){
-    if(p->state != RUNNABLE)
-      continue;
-    if(p->level == procLv)
-      execProc(p);
-  }
-}
-
-// priority scheduling with ptable for process at L2
-// !ptablelock을 얻은 후에만 호출되어야 함
-void priorityScheduler(){
-  // struct proc *p;
-  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-  //   if(p->state != RUNNABLE)
-  //     continue;
-  //   if(p->level == 0){                      //ptable에서 lv0이 하나라도 먼저 나올경우, lv0을 실행시기위해 현재 반복문을 나온다. 이 경우 lv0만 실행할 것이기 때문에 lv1이 ptable에 존재하는지는 알 필요가 없다.
-  //     isLv0Exist = true;
-  //     break;
-  //   } else if (p->level == 1){              //ptable에서 lv1이 먼저 나오는 경우, 그 process의 주소를 기록해두고, 남은 테이블에 lv0이 존재하는지 확인한 후 반복문을 나온다. ptable에 lv0이 하나도 없는 경우, 다시 lv1과 lv2가 섞인 ptable을 탐색하는 것을 줄이기 위해서이다. 
-  //     firstLv1Proc = p;
-  //     for(; p < &ptable.proc[NPROC]; p++){
-  //       if(p->state != RUNNABLE)
-  //         continue;
-  //       if(p->level == 0){
-  //         isLv0Exist = true;
-  //         break;
-  //       }
-  //     }
-  //     break;
-  //   }
-  // }
-}
-
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -387,70 +319,63 @@ void priorityScheduler(){
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
-void
-scheduler(void)
-{
+void scheduler(void) {
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
-  for(;;){
-    // Enable interrupts on this processor.
+
+  for (;;) {
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    bool isLv0Exist = false;
-    struct proc *firstLv1Proc = 0;
+    if (global_ticks >= 100) {
+      reset_priorities();
+      global_ticks = 0;
+    }
 
-    //lv0이 있는지, lv1이 있는지 확인.
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+    struct proc *selected_proc = 0;
+
+    // Check level 0 processes first
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state != RUNNABLE || p->level != 0)
         continue;
-      if(p->level == 0){                      //ptable에서 lv0이 하나라도 먼저 나올경우, lv0을 실행시기위해 현재 반복문을 나온다. 이 경우 lv0만 실행할 것이기 때문에 lv1이 ptable에 존재하는지는 알 필요가 없다.
-        isLv0Exist = true;
-        break;
-      } else if (p->level == 1){              //ptable에서 lv1이 먼저 나오는 경우, 그 process의 주소를 기록해두고, 남은 테이블에 lv0이 존재하는지 확인한 후 반복문을 나온다. ptable에 lv0이 하나도 없는 경우, 다시 lv1과 lv2가 섞인 ptable을 탐색하는 것을 줄이기 위해서이다. 
-        firstLv1Proc = p;
-        for(; p < &ptable.proc[NPROC]; p++){
-          if(p->state != RUNNABLE)
-            continue;
-          if(p->level == 0){
-            isLv0Exist = true;
-            break;
-          }
-        }
+
+      selected_proc = p;
+      break;
+    }
+
+    // If no level 0 processes, check level 1 processes
+    if (!selected_proc) {
+      for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+        if (p->state != RUNNABLE || p->level != 1)
+          continue;
+
+        selected_proc = p;
         break;
       }
     }
-    
-    //lv0이 하나라도 존재하는 경우, ptable을 돌며 lv0을 우선적으로 실행하
-    if(isLv0Exist){
-      rrScheduler(p,0);
+
+    // If there is a selected process, execute it
+    if (selected_proc) {
+      c->proc = selected_proc;
+      switchuvm(selected_proc);
+      selected_proc->state = RUNNING;
+      swtch(&(c->scheduler), selected_proc->context);
+      switchkvm();
+
+      update_level(selected_proc);
+
+      if (selected_proc->state == RUNNABLE && selected_proc->ticks >= (2 * selected_proc->level) + 4)
+        selected_proc->ticks = 0;
+
+      c->proc = 0;
     }
-    else if(firstLv1Proc){ // ptable에 lv0이 없고, lv1이 하나라도 있는 경우. lv1만 실행한다.
-      rrScheduler(firstLv1Proc,1);
-    }
-    // else{ // ptable에 lv0과 lv1이 모두 없는 경우. lv2를 priority scheduling 으로 실행.
-    //   //TODO: priority scheduler로 구현.
-    //   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    //     c->proc = p;
-    //     switchuvm(p);
-    //     p->state = RUNNING;
 
-    //     swtch(&(c->scheduler), p->context);
-    //     switchkvm();
-    //   }
-    // }
-        
-
-
-    
     release(&ptable.lock);
-
   }
 }
+
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
