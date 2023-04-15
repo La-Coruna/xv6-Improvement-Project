@@ -1,5 +1,12 @@
 #include "types.h"
+#include "x86.h"
 #include "defs.h"
+#include "date.h"
+#include "param.h"
+#include "memlayout.h"
+#include "mmu.h"
+#include "proc.h"
+
 
 //Simple system call
 int
@@ -12,14 +19,14 @@ myfunction(char *str)
 void
 yield_UM(void)
 {
+	yield();
 	cprintf("usermode yield\n");
 }
 
 int
 getLevel(void)
 {
-	cprintf("getLevel\n");
-	return 1;
+	return myproc()->level;
 }
 
 void
