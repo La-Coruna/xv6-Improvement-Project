@@ -3,7 +3,7 @@
 clear
 
 # make 명령어 실행
-make
+make fs.img
 
 # make 명령어가 에러 코드를 반환하면 스크립트 종료
 if [ $? -ne 0 ]; then
