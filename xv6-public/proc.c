@@ -334,8 +334,11 @@ void execProc(struct proc *p){
 
   //TODO: ticks 줄이기
   p->ticks -= 1;
+  cprintf("[pid: %d] ,ticks: %d\n",p->pid,p->ticks);
   if(p->ticks == 0){
     p->level++;
+    p->ticks=2*p->level+4;
+    cprintf("[pid: %d, changed level: %d]", p->pid,p->level);
   }
 
   // Process is done running for now.
@@ -357,26 +360,26 @@ void rrScheduler(struct proc *p, int procLv){
 // priority scheduling with ptable for process at L2
 // !ptablelock을 얻은 후에만 호출되어야 함
 void priorityScheduler(){
-  // struct proc *p;
-  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-  //   if(p->state != RUNNABLE)
-  //     continue;
-  //   if(p->level == 0){                      //ptable에서 lv0이 하나라도 먼저 나올경우, lv0을 실행시기위해 현재 반복문을 나온다. 이 경우 lv0만 실행할 것이기 때문에 lv1이 ptable에 존재하는지는 알 필요가 없다.
-  //     isLv0Exist = true;
-  //     break;
-  //   } else if (p->level == 1){              //ptable에서 lv1이 먼저 나오는 경우, 그 process의 주소를 기록해두고, 남은 테이블에 lv0이 존재하는지 확인한 후 반복문을 나온다. ptable에 lv0이 하나도 없는 경우, 다시 lv1과 lv2가 섞인 ptable을 탐색하는 것을 줄이기 위해서이다. 
-  //     firstLv1Proc = p;
-  //     for(; p < &ptable.proc[NPROC]; p++){
-  //       if(p->state != RUNNABLE)
-  //         continue;
-  //       if(p->level == 0){
-  //         isLv0Exist = true;
-  //         break;
-  //       }
-  //     }
-  //     break;
-  //   }
-  // }
+  struct proc *p;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state != RUNNABLE)
+      continue;
+    if(p->priority == 0){                      //ptable에서 lv0이 하나라도 먼저 나올경우, lv0을 실행시기위해 현재 반복문을 나온다. 이 경우 lv0만 실행할 것이기 때문에 lv1이 ptable에 존재하는지는 알 필요가 없다.
+      isLv0Exist = true;
+      break;
+    } else if (p->level == 1){              //ptable에서 lv1이 먼저 나오는 경우, 그 process의 주소를 기록해두고, 남은 테이블에 lv0이 존재하는지 확인한 후 반복문을 나온다. ptable에 lv0이 하나도 없는 경우, 다시 lv1과 lv2가 섞인 ptable을 탐색하는 것을 줄이기 위해서이다. 
+      firstLv1Proc = p;
+      for(; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
+        if(p->level == 0){
+          isLv0Exist = true;
+          break;
+        }
+      }
+      break;
+    }
+  }
 }
 
 //PAGEBREAK: 42
@@ -427,22 +430,22 @@ scheduler(void)
     
     //lv0이 하나라도 존재하는 경우, ptable을 돌며 lv0을 우선적으로 실행하
     if(isLv0Exist){
+      cprintf("[LV0 - RR]");
       rrScheduler(p,0);
     }
     else if(firstLv1Proc){ // ptable에 lv0이 없고, lv1이 하나라도 있는 경우. lv1만 실행한다.
+      cprintf("[LV1 - RR]");
       rrScheduler(firstLv1Proc,1);
     }
-    // else{ // ptable에 lv0과 lv1이 모두 없는 경우. lv2를 priority scheduling 으로 실행.
-    //   //TODO: priority scheduler로 구현.
-    //   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    //     c->proc = p;
-    //     switchuvm(p);
-    //     p->state = RUNNING;
-
-    //     swtch(&(c->scheduler), p->context);
-    //     switchkvm();
-    //   }
-    // }
+    else{ // ptable에 lv0과 lv1이 모두 없는 경우. lv2를 priority scheduling 으로 실행.
+      //cprintf("[LV2 - RR]");
+      //TODO: priority scheduler로 구현.
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
+        execProc(p);
+      }
+    }
         
 
 
