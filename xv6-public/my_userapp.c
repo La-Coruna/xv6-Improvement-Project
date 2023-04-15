@@ -36,7 +36,7 @@
 //     }
 //     else
 //     {
-//       // int r = setPriority(p, i); // setPriority는 void
+//       setPriority(p, i); // setPriority는 void
 //       int r = 1;
 //       if (r < 0)
 //       {
@@ -107,112 +107,119 @@
 // }
 
 
-#include "types.h"
-#include "stat.h"
-#include "user.h"
-
-int
-main(int argc, char *argv[])
-{
-	// if(strcmp(argv[1], "\"user\"") !=0){
-	// 	exit();
-	// }	
-  //int password = 2019019043;
-
-  __asm__("int $129");
-  __asm__("int $130");
-
-
-	char *buf= "Hello xv6!";
-	int ret_val;
-	ret_val = myfunction(buf);
-
-  schedulerLock(300);
-  schedulerLock(500);
-  setPriority(1234,5678);
-
-	printf(1, "Return value : 0x%x\n", ret_val);
-	exit();
-};
-
 // #include "types.h"
-// #include "user.h"
 // #include "stat.h"
+// #include "user.h"
 
-// typedef volatile int lock_t;
+// int
+// main(int argc, char *argv[])
+// {
+// 	// if(strcmp(argv[1], "\"user\"") !=0){
+// 	// 	exit();
+// 	// }	
+//   //int password = 2019019043;
 
-// void lock_init(lock_t *lock) {
-//   *lock = 0;
-// }
+//   __asm__("int $129");
+//   __asm__("int $130");
 
-// void lock_acquire(lock_t *lock) {
-//   while (1) {
-//     if (*lock == 0) {
-//       *lock = 1;
-//       break;
-//     }
-//   }
-// }
 
-// void lock_release(lock_t *lock) {
-//   *lock = 0;
-// }
+// 	char *buf= "Hello xv6!";
+// 	int ret_val;
+// 	ret_val = myfunction(buf);
 
-// void workload() {
-//   int i;
-//   for (i = 0; i < 2000000; i++) {
-//     asm("nop");
-//   }
-// }
+//   schedulerLock(300);
+//   schedulerLock(500);
+//   setPriority(1234,5678);
 
-// lock_t print_lock;
+// 	printf(1, "Return value : 0x%x\n", ret_val);
+// 	exit();
+// };
 
-// void print1(){
-//   lock_acquire(&print_lock);
-//   printf(1, "PID %d, level %d\n", getpid(), getLevel());
-//   lock_release(&print_lock);
-// }
+#include "types.h"
+#include "user.h"
+#include "stat.h"
 
-// int main(int argc, char *argv[]) {
-//   int pid;
-//   int num_children = 1;
-//   lock_init(&print_lock);
+typedef volatile int lock_t;
 
-//   for (int i = 0; i < num_children; i++) {
-//     pid = fork();
-//     if (pid < 0) {
-//       printf(1, "fork failed\n");
-//       exit();
-//     } else if (pid == 0) {
-      
-//       lock_acquire(&print_lock);
-//       printf(1, "<Create> PID %d, level %d\n", getpid(), getLevel());
-//       lock_release(&print_lock);
+void lock_init(lock_t *lock) {
+  *lock = 0;
+}
 
-//       for(int l=getLevel();l==0;l=getLevel())
-//         workload();
-//       print1();
+void lock_acquire(lock_t *lock) {
+  while (1) {
+    if (*lock == 0) {
+      *lock = 1;
+      break;
+    }
+  }
+}
 
-//       for(int l=getLevel();l==1;l=getLevel())
-//         workload();
-//       print1();
+void lock_release(lock_t *lock) {
+  *lock = 0;
+}
 
-//       workload();
-//       print1();
+void workload() {
+  int i;
+  for (i = 0; i < 2000000; i++) {
+    asm("nop");
+  }
+}
 
-//       lock_acquire(&print_lock);
-//       printf(1, "[Completed] PID %d, level %d\n", getpid(), getLevel());
-//       lock_release(&print_lock);
+lock_t print_lock;
 
-//       exit();
-//     }
-//   }
+void print1(){
+  lock_acquire(&print_lock);
+  //printf(1, "PID %d, level %d\n", getpid(), getLevel());
+  lock_release(&print_lock);
+}
 
-//   for (int i = 0; i < num_children; i++) {
-//     wait();
-//   }
+int main(int argc, char *argv[]) {
+	int pid;
+	int num_children = 8;
+	lock_init(&print_lock);
 
-//   printf(1, "All children completed\n");
+	setPriority(3,0);
 
-//   exit();
-// }
+	for (int i = 0; i < num_children; i++) {
+	pid = fork();
+	if (pid < 0) {
+		printf(1, "fork failed\n");
+		exit();
+	} else if (pid == 0) {
+		
+		
+		lock_acquire(&print_lock);
+		printf(1, "<Create> PID %d, level %d\n", getpid(), getLevel());
+		lock_release(&print_lock);
+
+		for(int l=getLevel();l==0;l=getLevel())
+		workload();
+
+		for(int l=getLevel();l==1;l=getLevel())
+		workload();
+
+		workload();
+
+		lock_acquire(&print_lock);
+		printf(1, "[Completed] PID %d, level %d\n", getpid(), getLevel());
+		lock_release(&print_lock);
+
+		exit();
+	}
+	}
+
+	setPriority(6,2);
+	setPriority(7,2);
+	setPriority(8,1);
+	setPriority(9,1);
+	setPriority(10,0);
+	setPriority(11,0);
+
+	for (int i = 0; i < num_children; i++) {
+	wait();
+	}
+
+	printf(1, "All children completed\n");
+
+	exit();
+}
