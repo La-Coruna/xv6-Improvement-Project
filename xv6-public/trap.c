@@ -22,6 +22,8 @@ tvinit(void)
   for(i = 0; i < 256; i++)
     SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
   SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
+  SETGATE(idt[T_SCHEDULERLOCK], 1, SEG_KCODE<<3, vectors[T_SCHEDULERLOCK], DPL_USER);
+  SETGATE(idt[T_SCHEDULERUNLOCK], 1, SEG_KCODE<<3, vectors[T_SCHEDULERUNLOCK], DPL_USER);
 
   initlock(&tickslock, "time");
 }
@@ -75,6 +77,18 @@ trap(struct trapframe *tf)
   case T_IRQ0 + IRQ_SPURIOUS:
     cprintf("cpu%d: spurious interrupt at %x:%x\n",
             cpuid(), tf->cs, tf->eip);
+    lapiceoi();
+    break;
+  case T_SCHEDULERLOCK:
+    int password1 = 2019019043;
+    // argint(0,&password); //! 인자를 무슨 방법으로 받지?
+    schedulerLock(password1);
+    lapiceoi();
+    break;
+  case T_SCHEDULERUNLOCK:    
+    int password2 = 2019019043;
+    // argint(0,&password); //! 인자를 무슨 방법으로 받지?
+    schedulerUnlock(password2);
     lapiceoi();
     break;
 
