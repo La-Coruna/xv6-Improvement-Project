@@ -364,21 +364,7 @@ void priorityScheduler(){
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state != RUNNABLE)
       continue;
-    if(p->priority == 0){                      //ptable에서 lv0이 하나라도 먼저 나올경우, lv0을 실행시기위해 현재 반복문을 나온다. 이 경우 lv0만 실행할 것이기 때문에 lv1이 ptable에 존재하는지는 알 필요가 없다.
-      isLv0Exist = true;
-      break;
-    } else if (p->level == 1){              //ptable에서 lv1이 먼저 나오는 경우, 그 process의 주소를 기록해두고, 남은 테이블에 lv0이 존재하는지 확인한 후 반복문을 나온다. ptable에 lv0이 하나도 없는 경우, 다시 lv1과 lv2가 섞인 ptable을 탐색하는 것을 줄이기 위해서이다. 
-      firstLv1Proc = p;
-      for(; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE)
-          continue;
-        if(p->level == 0){
-          isLv0Exist = true;
-          break;
-        }
-      }
-      break;
-    }
+    execProc(p);
   }
 }
 
