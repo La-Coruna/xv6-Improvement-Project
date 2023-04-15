@@ -32,19 +32,19 @@ getLevel(void)
 void
 setPriority(int pid, int priority)
 {
-	cprintf("setPriority\n");
+	cprintf("setPriority pid: %d, priority: %d\n",pid,priority);
 }
 
 void
 schedulerLock(int password)
 {
-	cprintf("schedulerLock\n");
+	cprintf("schedulerLock %d\n",password);
 }
 
 void
 schedulerUnlock(int password)
 {
-	cprintf("schedulerUnlock\n");
+	cprintf("schedulerUnlock %d\n",password);
 }
 
 
@@ -72,19 +72,28 @@ sys_getLevel(void)
 }
 
 void
-sys_setPriority(int pid, int priority)
+sys_setPriority(void)
 {
-	return setPriority(1,1);
+	int pid, priority;
+	if (argint(0,&pid)<0 || argint(1,&priority))
+		return;
+	return setPriority(pid,priority);
 }
 
 void
-sys_schedulerLock(int password)
+sys_schedulerLock(void)
 {
-	return schedulerLock(1);
+	int password;
+	if (argint(0,&password)<0)
+		return;
+	return schedulerLock(password);
 }
 
 void
-sys_schedulerUnlock(int password)
+sys_schedulerUnlock(void)
 {
-	return schedulerUnlock(1);
+	int password;
+	if (argint(0,&password)<0)
+		return;
+	return schedulerUnlock(password);
 }
