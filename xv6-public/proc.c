@@ -326,6 +326,7 @@ void spendTicks(struct proc *p){
 //  cprintf("[pid: %d, lv:%d], ticks: %d\n",p->pid,p->level,p->ticks);
   if(p->ticks == 0){
     if(p->level < 2){
+      p->level++;
       p->ticks = 2*(p->level)+4;
       return;
     }
@@ -342,6 +343,7 @@ void spendTicks(struct proc *p){
 // execute Process.
 // !ptablelock을 얻은 후에만 호출되어야 함
 void execProc(struct proc *p){
+  cprintf("%d proc exec. ticks: %d\n",p->pid, p->ticks);//debug
   struct cpu *c = mycpu();
   // Switch to chosen process.  It is the process's job
   // to release ptable.lock and then reacquire it
@@ -431,11 +433,11 @@ scheduler(void)
     
     //lv0이 하나라도 존재하는 경우, ptable을 돌며 lv0을 우선적으로 실행하
     if(isLv0Exist){
-      cprintf("[LV0 - RR]");
+      //cprintf("[LV0 - RR]");
       rrScheduler(p,0);
     }
     else if(firstLv1Proc){ // ptable에 lv0이 없고, lv1이 하나라도 있는 경우. lv1만 실행한다.
-      cprintf("[LV1 - RR]");
+      //cprintf("[LV1 - RR]");
       rrScheduler(firstLv1Proc,1);
     }
     else{ // ptable에 lv0과 lv1이 모두 없는 경우. lv2를 priority scheduling 으로 실행.
