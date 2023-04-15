@@ -317,11 +317,32 @@ wait(void)
   }
 }
 
+// !ptablelock을 얻은 후에만 호출되어야 함
+void spendTicks(struct proc *p){
+  if (p->ticks < 1)
+    panic("tick error");
+
+  p->ticks--;
+//  cprintf("[pid: %d, lv:%d], ticks: %d\n",p->pid,p->level,p->ticks);
+  if(p->ticks == 0){
+    if(p->level < 2){
+      p->ticks = 2*(p->level)+4;
+      return;
+    }
+    // If it is at lv2
+    cprintf("level2 ticks\n");
+    if(p->priority > 0)
+      p->priority--;
+    p->ticks=8;
+ //   cprintf("level2 ticks 하고 리턴까지 \n");
+  }
+  return;
+}
+
 // execute Process.
 // !ptablelock을 얻은 후에만 호출되어야 함
 void execProc(struct proc *p){
   struct cpu *c = mycpu();
-  //TODO: 내부를 roundrobin으로 구현해야함.
   // Switch to chosen process.  It is the process's job
   // to release ptable.lock and then reacquire it
   // before jumping back to us.
@@ -333,13 +354,7 @@ void execProc(struct proc *p){
   switchkvm();
 
   //TODO: ticks 줄이기
-  p->ticks -= 1;
-  cprintf("[pid: %d] ,ticks: %d\n",p->pid,p->ticks);
-  if(p->ticks == 0){
-    p->level++;
-    p->ticks=2*p->level+4;
-    cprintf("[pid: %d, changed level: %d]", p->pid,p->level);
-  }
+  spendTicks(p);
 
   // Process is done running for now.
   // It should have changed its p->state before coming back.
