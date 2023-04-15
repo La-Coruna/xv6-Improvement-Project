@@ -30,9 +30,10 @@ getLevel(void)
 }
 
 void
-setPriority(int pid, int priority)
+setPriority_UM(int pid, int priority)
 {
 	cprintf("setPriority pid: %d, priority: %d\n",pid,priority);
+	setPriority(pid,priority);
 }
 
 void
@@ -77,7 +78,7 @@ sys_setPriority(void)
 	int pid, priority;
 	if (argint(0,&pid)<0 || argint(1,&priority))
 		return;
-	return setPriority(pid,priority);
+	return setPriority_UM(pid,priority);
 }
 
 void
