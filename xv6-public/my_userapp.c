@@ -2,6 +2,115 @@
 // #include "stat.h"
 // #include "user.h"
 
+// #define NUM_LOOP 100000
+// #define NUM_YIELD 20000
+// #define NUM_SLEEP 1000
+
+// #define NUM_THREAD 4
+// #define MAX_LEVEL 5
+
+// int parent;
+
+// int fork_children()
+// {
+//   int i, p;
+//   for (i = 0; i < NUM_THREAD; i++)
+//     if ((p = fork()) == 0)
+//     {
+//       sleep(10);
+//       return getpid();
+//     }
+//   return parent;
+// }
+
+
+// int fork_children2()
+// {
+//   int i, p;
+//   for (i = 0; i < NUM_THREAD; i++)
+//   {
+//     if ((p = fork()) == 0)
+//     {
+//       sleep(300);
+//       return getpid();
+//     }
+//     else
+//     {
+//       // int r = setPriority(p, i); // setPriority는 void
+//       int r = 1;
+//       if (r < 0)
+//       {
+//         printf(1, "setPriority returned %d\n", r);
+//         exit();
+//       }
+//     }
+//   }
+//   return parent;
+// }
+
+// int max_level;
+
+// int fork_children3()
+// {
+//   int i, p;
+//   for (i = 0; i < NUM_THREAD; i++)
+//   {
+//     if ((p = fork()) == 0)
+//     {
+//       sleep(10);
+//       max_level = i;
+//       return getpid();
+//     }
+//   }
+//   return parent;
+// }
+// void exit_children()
+// {
+//   if (getpid() != parent)
+//     exit();
+//   while (wait() != -1);
+// }
+
+// int main(int argc, char *argv[])
+// {
+//   int i, pid;
+//   int count[MAX_LEVEL] = {0};
+// //  int child;
+
+//   parent = getpid();
+
+//   printf(1, "MLFQ test start\n");
+
+//   printf(1, "[Test 1] default\n");
+//   pid = fork_children();
+
+//   if (pid != parent)
+//   {
+//     for (i = 0; i < NUM_LOOP; i++)
+//     {
+//       int x = getLevel();
+//       if (x < 0 || x > 4)
+//       {
+//         printf(1, "Wrong level: %d\n", x);
+//         exit();
+//       }
+//       count[x]++;
+//     }
+//     printf(1, "Process %d\n", pid);
+//     for (i = 0; i < MAX_LEVEL; i++)
+//       printf(1, "L%d: %d\n", i, count[i]);
+//   }
+//   exit_children();
+//   printf(1, "[Test 1] finished\n");
+//   printf(1, "done\n");
+//   exit();
+// }
+
+
+// #include "types.h"
+// #include "stat.h"
+// #include "user.h"
+
 // int
 // main(int argc, char *argv[])
 // {
@@ -25,6 +134,25 @@
 #include "user.h"
 #include "stat.h"
 
+typedef volatile int lock_t;
+
+void lock_init(lock_t *lock) {
+  *lock = 0;
+}
+
+void lock_acquire(lock_t *lock) {
+  while (1) {
+    if (*lock == 0) {
+      *lock = 1;
+      break;
+    }
+  }
+}
+
+void lock_release(lock_t *lock) {
+  *lock = 0;
+}
+
 void workload() {
   int i;
   for (i = 0; i < 2000000; i++) {
@@ -32,16 +160,18 @@ void workload() {
   }
 }
 
+lock_t print_lock;
+
+void print1(){
+  lock_acquire(&print_lock);
+  printf(1, "PID %d, level %d\n", getpid(), getLevel());
+  lock_release(&print_lock);
+}
+
 int main(int argc, char *argv[]) {
   int pid;
-  int num_children = 6;
-
-  myfunction("Hello xv6!");
-  yield();
-  getLevel();
-  setPriority(2,2);
-  schedulerLock(3);
-  schedulerUnlock(3);
+  int num_children = 1;
+  lock_init(&print_lock);
 
   for (int i = 0; i < num_children; i++) {
     pid = fork();
@@ -49,18 +179,26 @@ int main(int argc, char *argv[]) {
       printf(1, "fork failed\n");
       exit();
     } else if (pid == 0) {
-      // printf(1, "Child %d created with PID %d\n", i, getpid());
-      printf(1, "%d", i);
-      //setPriority(getpid(), 3 - (i % 4)); // Vary priorities from 3 to 0
+      
+      lock_acquire(&print_lock);
+      printf(1, "<Create> PID %d, level %d\n", getpid(), getLevel());
+      lock_release(&print_lock);
+
+      for(int l=getLevel();l==0;l=getLevel())
+        workload();
+      print1();
+
+      for(int l=getLevel();l==1;l=getLevel())
+        workload();
+      print1();
+
       workload();
-      printf(1, "%d", i);
-      workload();
-      printf(1, "%d", i);
-      workload();
-      printf(1, "%d", i);
-      workload();
-      printf(1, "%d", i);
-      // printf(1, "Child %d with PID %d completed\n", i, getpid());
+      print1();
+
+      lock_acquire(&print_lock);
+      printf(1, "[Completed] PID %d, level %d\n", getpid(), getLevel());
+      lock_release(&print_lock);
+
       exit();
     }
   }
