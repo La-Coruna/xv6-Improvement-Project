@@ -10,6 +10,7 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  int globalTicks;
 } ptable;
 
 static struct proc *initproc;
@@ -24,6 +25,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  ptable.globalTicks = 0;
 }
 
 // Must be called with interrupts disabled
@@ -324,6 +326,35 @@ void setPriority(int pid, int priority){
   }
 }
 
+// when global ticks become 100, priority boosting occurs.
+void
+priorityBoosting(){
+  struct proc *p;
+  procdump();//! for debug
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    p->level = 0;
+    p->priority = 3;
+    p->ticks=4;
+  }
+  ptable.globalTicks = 0;
+  procdump();//! for debug
+  return;
+}
+
+// when process ran, global ticks increase by 1
+// !ptablelock을 얻은 후에만 호출되어야 함
+void
+updateGlobalTicks(){
+  // # when the globalTicks become 100
+  cprintf("gt: %d\n",ptable.globalTicks); //! for debug
+  if(ptable.globalTicks == 99)
+    return priorityBoosting();
+  
+  ptable.globalTicks++;
+  return;
+}
+
+// when process ran, the processs's ticks decrease by 1
 // !ptablelock을 얻은 후에만 호출되어야 함
 void
 spendTicks(struct proc *p)
@@ -352,10 +383,10 @@ void
 execProc(struct proc *p)
 {
   //! for debug
-  // if(p->level!=2)
-  //   cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks); //#debug
-  // else
-  //   cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks); //#debug
+  if(p->level!=2)
+    cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks); 
+  else
+    cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
 
   struct cpu *c = mycpu();
   // Switch to chosen process.  It is the process's job
@@ -370,6 +401,7 @@ execProc(struct proc *p)
 
   //# tick 줄이기
   spendTicks(p);
+  updateGlobalTicks();
 
   // Process is done running for now.
   // It should have changed its p->state before coming back.
