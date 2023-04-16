@@ -80,15 +80,15 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
   case T_SCHEDULERLOCK:
-    int password1 = 2019019043;
+    //int password1 = 2019019043;
     // argint(0,&password); //! 인자를 무슨 방법으로 받지?
-    schedulerLock(password1);
+    schedulerLock();
     lapiceoi();
     break;
   case T_SCHEDULERUNLOCK:    
-    int password2 = 2019019043;
+    //int password2 = 2019019043;
     // argint(0,&password); //! 인자를 무슨 방법으로 받지?
-    schedulerUnlock(password2);
+    schedulerUnlock();
     lapiceoi();
     break;
 
