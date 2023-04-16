@@ -16,36 +16,10 @@ myfunction(char *str)
 	return 0xABCDABCD;
 }
 
-void
-yield_UM(void)
-{
-	yield();
-	cprintf("usermode yield\n");
-}
-
 int
 getLevel(void)
 {
 	return myproc()->level;
-}
-
-void
-setPriority_UM(int pid, int priority)
-{
-	cprintf("setPriority pid: %d, priority: %d\n",pid,priority);
-	setPriority(pid,priority);
-}
-
-void
-schedulerLock(int password)
-{
-	cprintf("schedulerLock %d\n",password);
-}
-
-void
-schedulerUnlock(int password)
-{
-	cprintf("schedulerUnlock %d\n",password);
 }
 
 
@@ -63,7 +37,9 @@ sys_myfunction(void)
 void
 sys_yield(void)
 {
-	return yield_UM();
+	yield();
+	cprintf("yield\n");
+	return;
 }
 
 int
@@ -78,23 +54,41 @@ sys_setPriority(void)
 	int pid, priority;
 	if (argint(0,&pid)<0 || argint(1,&priority))
 		return;
-	return setPriority_UM(pid,priority);
+	cprintf("setPriority pid: %d, priority: %d\n",pid,priority);
+	setPriority(pid,priority);
+	return;
 }
 
 void
 sys_schedulerLock(void)
 {
 	int password;
-	if (argint(0,&password)<0)
+	if (argint(0,&password)<0){
+		cprintf("should input password\n");
 		return;
-	return schedulerLock(password);
+	}
+  else if(password != 2019019043){
+    struct proc *p = myproc();
+    cprintf("schedulerLock is failed\npid: %d, ticks: %d, level: %d\n",p->pid, (2*(p->level)+4) - p->ticks, p->level);
+    exit();
+  }
+	schedulerLock();
+	return;
 }
 
 void
 sys_schedulerUnlock(void)
 {
 	int password;
-	if (argint(0,&password)<0)
+	if (argint(0,&password)<0){
+		cprintf("should input password\n");
 		return;
-	return schedulerUnlock(password);
+	}
+  else if(password != 2019019043){
+    struct proc *p = myproc();
+    cprintf("schedulerUnlock is failed\npid: %d, ticks: %d, level: %d\n",p->pid, (2*(p->level)+4) - p->ticks, p->level);
+    exit();
+  }
+	schedulerUnlock();
+	return;
 }

@@ -120,6 +120,15 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+// add by me
+void setPriority(int pid, int priority);
+int schedulerLock(void);
+int schedulerUnlock(void);
+void priorityBoosting(void);
+void updateGlobalTicks(void);
+void spendTicks(struct proc*);
+void execProc(struct proc*);
+void rrScheduler(struct proc *p, int procLv, int isFullRotation);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -188,11 +197,7 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 //prac_syscall.c
 int myfunction(char*);
-void yield(void);
 int getLevel(void);
-void setPriority(int pid, int priority);
-void schedulerLock(int password);
-void schedulerUnlock(int password);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
