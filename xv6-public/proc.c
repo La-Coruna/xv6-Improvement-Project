@@ -11,6 +11,8 @@ struct {
   struct spinlock lock;
   struct proc proc[NPROC];
   int globalTicks;
+  struct proc *preferentialProc;
+  struct proc *firstLv0Proc;
 } ptable;
 
 static struct proc *initproc;
@@ -26,6 +28,8 @@ pinit(void)
 {
   initlock(&ptable.lock, "ptable");
   ptable.globalTicks = 0;
+  ptable.preferentialProc = 0;
+  ptable.firstLv0Proc = 0;
 }
 
 // Must be called with interrupts disabled
@@ -40,10 +44,10 @@ struct cpu*
 mycpu(void)
 {
   int apicid, i;
-  
+
   if(readeflags()&FL_IF)
     panic("mycpu called with interrupts enabled\n");
-  
+
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
@@ -129,7 +133,7 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
-  
+
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -280,7 +284,7 @@ wait(void)
   struct proc *p;
   int havekids, pid;
   struct proc *curproc = myproc();
-  
+
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
@@ -325,10 +329,104 @@ void setPriority(int pid, int priority){
     }
   }
 }
+// !ptable lock을 얻고 호출되어야함
+// int
+// relocateToFirstInLv(struct proc *curproc)
+// {
+  // int curlevel = curproc->level;
+  // struct proc *firstp = 0;
+  // struct proc *emptyp = 0;
+  // struct proc *p;
+  // //acquire(&ptable.lock);
+  // for(p=ptable.proc;p<&ptable.proc[NPROC];p++){
+  //   if(emptyp == 0 && p->state == UNUSED){
+  //     emptyp = p;
+  //   }
+  //   else if(p->level==curlevel && p->state == RUNNABLE){
+  //     firstp = p;
+  //     break;
+  //   }
+  // }
+  // // # when curproc is already first
+  // if(firstp == curproc){
+  //   return 1;
+  // }
+  // // # when empty space is not existed before firstp
+  // if(emptyp == 0){
+  //   for(;p<&ptable.proc[NPROC];p++){
+  //     if(p->state == UNUSED){
+  //       emptyp = p;
+  //       break;
+  //     }
+  //   }
+  // }
+  // // # when empty space is not existed after firstp too
+  // if(emptyp == 0){
+  //   // relocation is failed.
+  //   return 0;
+  // }
+  // for(;emptyp>firstp; emptyp--){
+  //   *emptyp = *(--emptyp);
+  // }
+  // *emptyp = *curproc;
+  // curproc->state = UNUSED;
+  // //release(&ptable.lock);
+//   return 1;
+// }
+
+int
+schedulerLock(void)
+{
+  acquire(&ptable.lock);
+  cprintf("<<<scheduler Lock execute, pid:%d\n",myproc()->pid); // ! for debug
+
+  // # 1. reset global ticks
+  ptable.globalTicks = 0;
+
+  // # if there is already a preferentialProc, schedulerLock will be failed
+  if(ptable.preferentialProc && ptable.preferentialProc->state == RUNNABLE){
+    release(&ptable.lock);
+    cprintf("<<<scheduler Lock execute but failed, preferentialProc:%d\n",ptable.preferentialProc); // ! for debug
+    return 0;
+  }
+
+  // # 2. myproc() become a preferentialProc
+  ptable.preferentialProc = myproc();
+
+  cprintf("<<<scheduler Lock execute success>>, preferentialProc:%d\n",ptable.preferentialProc->pid); // ! for debug
+  release(&ptable.lock);
+  return 1;
+}
+
+int
+schedulerUnlock(void)
+{
+  struct proc *curproc = myproc();
+  acquire(&ptable.lock);
+  cprintf("scheduler 'UN'lock execute\n"); // ! for debug
+  if (curproc != ptable.preferentialProc){
+    release(&ptable.lock);
+    cprintf("scheduler 'UN'lock execute but failed\n"); // ! for debug
+    return 0;
+  }
+  ptable.firstLv0Proc = curproc;
+  curproc->level = 0;
+  curproc->priority = 3;
+  curproc->ticks = 4;
+
+  // # 먼저 스캐줄링 해야하는 프로세스를 없앴다.
+  ptable.preferentialProc = 0;
+  cprintf("<<<scheduler 'UN'lock execute success, preferentialProc:%d\n",ptable.preferentialProc); // ! for debug
+
+
+  release(&ptable.lock);
+  return 1;
+}
 
 // when global ticks become 100, priority boosting occurs.
 void
-priorityBoosting(){
+priorityBoosting(void)
+{
   struct proc *p;
   procdump();//! for debug
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -344,12 +442,19 @@ priorityBoosting(){
 // when process ran, global ticks increase by 1
 // !ptablelock을 얻은 후에만 호출되어야 함
 void
-updateGlobalTicks(){
+updateGlobalTicks(void)
+{
   // # when the globalTicks become 100
   cprintf("gt: %d\n",ptable.globalTicks); //! for debug
-  if(ptable.globalTicks == 99)
+  if(ptable.globalTicks == 99){
+    // # If schedulerLock is on,
+    if(ptable.preferentialProc){
+      ptable.firstLv0Proc = ptable.preferentialProc;
+      ptable.preferentialProc = 0;
+    }
     return priorityBoosting();
-  
+  }
+
   ptable.globalTicks++;
   return;
 }
@@ -384,7 +489,7 @@ execProc(struct proc *p)
 {
   //! for debug
   if(p->level!=2)
-    cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks); 
+    cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks);
   else
     cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
 
@@ -411,13 +516,22 @@ execProc(struct proc *p)
 // round-robin scheduling with ptable for process at 'procLv'
 // !ptablelock을 얻은 후에만 호출되어야 함
 void
-rrScheduler(struct proc *p, int procLv)
+rrScheduler(struct proc *startp, int procLv, int isFullRotation)
 {
-  for(; p < &ptable.proc[NPROC]; p++){
+  struct proc *p;
+  for(p = startp; !(ptable.preferentialProc) && p < &ptable.proc[NPROC]; p++){
     if(p->state != RUNNABLE)
       continue;
     if(p->level == procLv)
       execProc(p);
+  }
+  if(isFullRotation){
+    for(p = ptable.proc; !(ptable.preferentialProc) && p < startp; p++){
+      if(p->state != RUNNABLE)
+        continue;
+      if(p->level == procLv)
+        execProc(p);
+    }
   }
 }
 
@@ -469,7 +583,7 @@ priorityScheduler()
       prio = 3;
     }
   }
-  for(; p < &ptable.proc[NPROC]; p++){
+  for(; !(ptable.preferentialProc) && p < &ptable.proc[NPROC]; p++){
     if(p->state != RUNNABLE)
       continue;
     if(p->priority == prio)
@@ -491,7 +605,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
@@ -499,11 +613,37 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    int isLv0Exist = 0;
     struct proc *firstLv1Proc = 0;
+    if(ptable.preferentialProc)
+      cprintf("preferentialProc: %d\n",ptable.preferentialProc->pid); // ! for debug
+    // # EXECUTE ONE PROCESS
+    // # If there is a preferential process ( when the schedulerLock is called )
+    if(ptable.preferentialProc){
+      if(ptable.preferentialProc->state == RUNNABLE)
+        execProc(ptable.preferentialProc);
+      else
+        ptable.preferentialProc = 0;
 
-    // # Exploring which priority processes are runnable
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      release(&ptable.lock);
+      continue;
+    }
+
+    // # MLFQ SCHEDULING
+
+    // #1 If we aldeady know whether the first process at level 0 is existed
+    if(ptable.firstLv0Proc != 0 && ptable.firstLv0Proc->level==0 && ptable.firstLv0Proc->state == RUNNABLE){
+      rrScheduler(ptable.firstLv0Proc,0,1);
+      release(&ptable.lock);
+      continue;
+    }
+
+    // #2 If we don't know whether the first process at level 0 is existed
+    if(ptable.firstLv0Proc == 0)
+      p = ptable.proc;
+    else // firstLv0Proc->state 가 RUNNABLE이 아닌 경우
+      p = ptable.firstLv0Proc;
+
+    for(; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
       if(firstLv1Proc == 0 && p->level == 1 ){
@@ -511,26 +651,40 @@ scheduler(void)
         continue;
       }
       if(p->level == 0){
-        isLv0Exist = 1;
+        ptable.firstLv0Proc = p;
         break;
       }
     }
-    
+
+    // #2-a If you started to search from middle of ptable.proc, you should keep searching until back to start point
+    if(ptable.firstLv0Proc != 0 && (ptable.firstLv0Proc->state != RUNNABLE || ptable.firstLv0Proc->level!=0)){
+      struct proc *loopEnd = ptable.firstLv0Proc;
+      ptable.firstLv0Proc = 0;
+      for(p=ptable.proc; p < loopEnd; p++){
+        if(p->state != RUNNABLE)
+          continue;
+        if(firstLv1Proc == 0 && p->level == 1 ){
+          firstLv1Proc = p;
+          continue;
+        }
+        if(p->level == 0){
+          ptable.firstLv0Proc = p;
+          break;
+        }
+      }
+    }
+
     //lv0이 하나라도 존재하는 경우, ptable을 돌며 lv0을 우선적으로 실행하
-    if(isLv0Exist){
-      rrScheduler(p,0);
+    if(ptable.firstLv0Proc){
+      rrScheduler(p,0,1);
     }
     else if(firstLv1Proc){ // ptable에 lv0이 없고, lv1이 하나라도 있는 경우. lv1만 실행한다.
-      rrScheduler(firstLv1Proc,1);
+      rrScheduler(firstLv1Proc,1,0);
     }
     else{ // ptable에 lv0과 lv1이 모두 없는 경우. lv2를 priority scheduling 으로 실행.
-      //TODO: priority scheduler로 구현.
       priorityScheduler();
     }
-        
 
-
-    
     release(&ptable.lock);
 
   }
@@ -599,7 +753,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   if(p == 0)
     panic("sleep");
 
