@@ -186,17 +186,26 @@ int main(int argc, char *argv[]) {
 		printf(1, "fork failed\n");
 		exit();
 	} else if (pid == 0) {
+		setPriority(getpid(),0);
+		if(i>=6){
+			schedulerLock(2019019043);
+		}
 		
-		
+
 		lock_acquire(&print_lock);
 		printf(1, "<Create> PID %d, level %d\n", getpid(), getLevel());
 		lock_release(&print_lock);
 
 		for(int l=getLevel();l==0;l=getLevel())
-		workload();
+			workload();
 
-		for(int l=getLevel();l==1;l=getLevel())
-		workload();
+		if(i>=6){
+			schedulerUnlock(201901904);
+			printf(1,"asdfasdfasdfasdfasdffsdafasdfasdfasdfsad");
+		}
+
+		for(int l=getLevel();l<2;l=getLevel())
+			workload();
 
 		workload();
 
@@ -208,12 +217,12 @@ int main(int argc, char *argv[]) {
 	}
 	}
 
-	setPriority(6,2);
-	setPriority(7,2);
-	setPriority(8,1);
-	setPriority(9,1);
-	setPriority(10,0);
-	setPriority(11,0);
+	// setPriority(6,2);
+	// setPriority(7,2);
+	// setPriority(8,1);
+	// setPriority(9,1);
+	// setPriority(10,0);
+	// setPriority(11,0);
 
 	for (int i = 0; i < num_children; i++) {
 	wait();
