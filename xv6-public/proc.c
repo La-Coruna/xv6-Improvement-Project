@@ -101,7 +101,7 @@ int checkQueue(int level){
   }
   // # next test
   cprintf("next test : ");
-  whlie(1){
+  while(1){
     cprintf("%d ",p->pid);
     if(p->next == 0){
       cprintf("%d's next is 0\n",p->pid);
@@ -113,7 +113,7 @@ int checkQueue(int level){
       p = p->next;
   }
   cprintf("\nnext test : ");
-  whlie(1){
+  while(1){
     cprintf("%d ",p->pid);
     if(p->prev == 0){
       cprintf("%d's prev is 0\n",p->pid);
