@@ -121,6 +121,10 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 // add by me
+void insertHead(struct proc *newHead, int lvOfHead);
+void insertTail(struct proc *newTail, int lvOfHead);
+void detachNode(struct proc *);
+void printAllNode();
 void setPriority(int pid, int priority);
 int schedulerLock(void);
 int schedulerUnlock(void);
