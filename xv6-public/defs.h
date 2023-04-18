@@ -120,10 +120,12 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-// add by me
+// added by me
 void insertHead(struct proc *newHead, int lvOfHead);
 void insertTail(struct proc *newTail, int lvOfHead);
 void detachNode(struct proc *);
+int shiftHead(int level);
+int checkQueue(int level);
 void printAllNode();
 void setPriority(int pid, int priority);
 int schedulerLock(void);
@@ -132,7 +134,8 @@ void priorityBoosting(void);
 void updateGlobalTicks(void);
 void spendTicks(struct proc*);
 void execProc(struct proc*);
-void rrScheduler(struct proc *p, int procLv, int isFullRotation);
+int findAndExec_RR(int level);
+int findAndExec_PRIO(int level);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
