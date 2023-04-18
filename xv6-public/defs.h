@@ -125,6 +125,8 @@ void insertHead(struct proc *newHead, int lvOfHead);
 void insertTail(struct proc *newTail, int lvOfHead);
 void detachNode(struct proc *);
 int shiftHead(int level);
+void mergeQueueToLv0();
+void printPrevNext(struct proc* p);
 int checkQueue(int level);
 void printAllNode();
 void setPriority(int pid, int priority);

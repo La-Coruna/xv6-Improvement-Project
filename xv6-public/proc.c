@@ -53,10 +53,10 @@ insertTail(struct proc *newTail, int lvOfHead)
   if(newTail->level != lvOfHead){
     panic("진짜 말도 안되는 경우.");
   }
-  cprintf("@@@@insert pid:%d in Lv%d\n",newTail->pid, lvOfHead);
+  //cprintf("@@@@insert pid:%d in Lv%d\n",newTail->pid, lvOfHead); // ! for debug
   // # 1. head가 기존에 없는 경우, newTail이 head가 된다.
   if(ptable.headLv[lvOfHead] == 0){
-    cprintf("나 들어가려는데 헤드가 없다! 내가 헤드해야지~\n");
+    //cprintf("나 들어가려는데 헤드가 없다! 내가 헤드해야지~\n");
     newTail->prev = newTail;
     newTail->next = newTail;
     ptable.headLv[lvOfHead] = newTail;
@@ -75,23 +75,56 @@ insertTail(struct proc *newTail, int lvOfHead)
   return;
 }
 
+// void
+// insertTail_allOfQueue(struct proc *srcQ, struct proc *destQ)
+// {
+//   // ! for debug
+//   if(srcQ == destQ)
+//     panic("말도 안됨.");
+//   //cprintf("@@@@insert pid:%d in Lv%d\n",newTail->pid, lvOfHead); // ! for debug
+//   // # 1. head가 기존에 없는 경우, newTail이 head가 된다.
+//   if(ptable.headLv[lvOfHead] == 0){
+//     //cprintf("나 들어가려는데 헤드가 없다! 내가 헤드해야지~\n");
+//     newTail->prev = newTail;
+//     newTail->next = newTail;
+//     ptable.headLv[lvOfHead] = newTail;
+
+//     //checkQueue(lvOfHead); // ! for debug
+//     return;
+//   }
+
+//   // # 2. head가 있는 경우, new process가 새로운 tail가 된다.
+//   struct proc* head = ptable.headLv[lvOfHead];
+//   struct proc* oldTail = head->prev;
+//   oldTail->next = newTail;
+//   newTail->prev = oldTail;
+//   newTail->next = head;
+//   head->prev = newTail;
+//   return;
+// }
+
 // 무조건 큐 안에 있는 노드에만 사용해야함.
 // !ptablelock을 얻은 후에만 호출되어야 함!
 void
 detachNode(struct proc* p)
 {
-  cprintf("나(%d) 이제 큐에서 없어져!\n",p->pid); // ! for debug
+  //cprintf("나(%d) 이제 큐에서 없어져!\n",p->pid); // ! for debug
+  if(p->prev == 0 || p->next == 0){
+    //cprintf("나(%d) 이미 큐에서 연결이 끊겼어 ㅜㅜ*\n",p->pid);
+    printPrevNext(p);
+    return;
+  }
   // # 1. p가 큐에 혼자일 경우
   if(p->next == p){
-    cprintf("내가 이 큐에 혼자 있었네?\n");
+    // //cprintf("나는 이 큐에 혼자 있었네?\n");
     if(p != ptable.headLv[p->level]) // ! for debug
       panic("process link error");
     ptable.headLv[p->level] = 0;
-    cprintf("나 혼자 큐에 있어서 헤드를 바꿨어! HeadLv%d : %d\n",p->level,ptable.headLv[p->level]); // ! for debug
+    //cprintf("나 혼자 큐에 있어서 헤드를 바꿨어! HeadLv%d : %d\n",p->level,ptable.headLv[p->level]); // ! for debug
   } 
   // # 2. 혼자가 아닐 경우
   else {
-    cprintf("나 사라지기전에 이 큐 체크좀 해볼게!");
+    //cprintf("나 사라지기전에 이 큐 체크좀 해볼게!");
     checkQueue(p->level);
     p->prev->next = p->next;
     p->next->prev = p->prev;
@@ -115,12 +148,47 @@ shiftHead(int level)
   return 1;
 }
 
+void
+mergeQueueToLv0(){
+  // # lv0의 tail에 lv1 삽입 후 lv2를 삽입하는 방식으로 병합. (최대한 기존의 순서를 보장하기 위해.)
+  for(int i = 1; i < 3; i++){
+    // # 삽입하려는 큐가 비어있을 때, 다음 큐 삽입
+    if(ptable.headLv[i] == 0)
+      continue;
+
+    // # 삽입하려는 큐의 proc들의 lv과 tick을 초기화해줌.
+    struct proc *p;
+    for(p=ptable.headLv[i];;p=p->next){
+      p->level = 0;
+      p->priority = 3;
+      p->ticks = 4;
+      if(p->next == ptable.headLv[i])
+        break;
+    }
+
+    // # when Lv0 quqeue is empty
+    if(ptable.headLv[0] == 0){
+      ptable.headLv[0] = ptable.headLv[i];
+      continue;
+    }
+    // # when Lv0 queue is non-empty
+    else{
+      (ptable.headLv[0]->prev)->next = (ptable.headLv[i]);
+      (ptable.headLv[i]->prev)->next = (ptable.headLv[0]);
+      struct proc *tmp = (ptable.headLv[0]->prev);
+      (ptable.headLv[0])->prev = (ptable.headLv[i]->prev);
+      (ptable.headLv[i])->prev = tmp;
+    }
+    ptable.headLv[i]=0;
+  }  
+}
+
 void printPrevNext(struct proc* p){
-  cprintf("(%d<-)%d(->%d)\n",p->prev != 0 ? p->prev->pid : 0 , p->pid ,p->next != 0 ? p->prev->pid : 0 );
+  cprintf("(%d<-)%d(->%d)\n",p->prev != 0 ? p->prev->pid : 0 , p->pid ,p->next != 0 ? p->next->pid : 0 );
 }
 
 int
-checkQueue(int level)
+checkQueue1(int level)
 {
   cprintf("check queue Lv%d \n",level);
   struct proc *head = ptable.headLv[level];
@@ -193,6 +261,89 @@ checkQueue(int level)
 
   cprintf("\ncheck is successed\n");
   return 1;
+}
+
+int
+checkQueue(int level)
+{
+  //cprintf("check queue Lv%d \n",level);
+  struct proc *head = ptable.headLv[level];
+  struct proc *p = head;
+  if (head == 0){
+    //cprintf("Lv%d is empty queue.\n",level);
+    return 0;
+  }
+  // # next test
+  //cprintf("next test : ");
+  while(1){
+    // ! 다른 레벨이 큐에 들어온 에러케이스
+    if(p->level != level){
+      cprintf("pid:(%d<-)%d(->%d) (lv:%d) is in Lv%d queue.*\n",p->prev->pid,p->pid,p->next->pid,p->level,level);
+      printAllNode();
+      procdump();
+      while(1)
+        ;
+      //return -1;
+    }
+    //cprintf("%d",p->pid);
+
+    // ! next가 0인 에러케이스
+    if(p->next == 0){
+      cprintf("pid:%d's next is 0\n",p->pid);
+      return -1;
+    }
+
+
+    //cprintf("(->%d) ", p->next->pid);
+    if(p->next == p && p != head){
+      cprintf("pid:(%d<-)%d(->%d)'s next is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
+      printAllNode();
+      while(1)
+        ;
+     // return -1;
+    }
+    if(p->next == head)
+      break;
+    else
+      p = p->next;
+  }
+
+
+
+  p = head;
+  //cprintf("\nprev test : ");
+  while(1){
+    //cprintf("%d",p->pid);
+    if(p->prev == 0){
+      cprintf("pid:%d's prev is 0\n",p->pid);
+      printAllNode();
+      while(1)
+        ;
+      //return -1;
+    }
+    //cprintf("(->%d) ", p->prev->pid);
+    if(p->prev == p && p != head){
+      cprintf("pid:(%d<-)%d(->%d)'s prev is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
+      printAllNode();
+      while(1)
+        ;
+      //return -1;
+    }
+    if(p->prev == head)
+      break;
+    else
+      p = p->prev;
+  }
+
+  //cprintf("\ncheck is successed\n");
+  return 1;
+}
+
+void checkAllQueue(){
+  checkQueue(0);
+  checkQueue(1);
+  checkQueue(2);
+  return;
 }
 
 void
@@ -315,10 +466,10 @@ found:
   p->level = 0; // process가 처음 생성될 때는 lv0으로 시작.
   p->priority = 3;
   p->ticks=4;
-  cprintf("나(%d) 생성돼서 큐에 들어간다~\n",p->pid);
-  checkQueue(0);
-  checkQueue(1);
-  checkQueue(2);
+  //cprintf("나(%d) 생성돼서 큐에 들어간다~\n",p->pid);
+  checkQueue(0); // ! for debug
+  checkQueue(1); // ! for debug
+  checkQueue(2);  // ! for debug
   insertTail(p,0);
 
   release(&ptable.lock);
@@ -495,10 +646,11 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  cprintf("나(%d) 좀비가 됐오~~\n",curproc->pid);
+  curproc->a=1; // ! for debug
+  //cprintf("나(%d) 좀비가 됐오~~\n",curproc->pid);
   printPrevNext(curproc);
   detachNode(curproc);
-  cprintf("나 좀비인데 큐에서도 나왔어!!~~\n");
+  //cprintf("나 좀비인데 큐에서도 나왔어!!~~\n");
   sched();
   panic("zombie exit");
 }
@@ -656,29 +808,12 @@ void
 priorityBoosting(void)
 {
   //struct proc *p;
-  procdump();//! for debug
-
-
-  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-  //   p->level = 0;
-  //   p->priority = 3;
-  //   p->ticks=4;
-  // }
-
-
-  // //TODO: 기존에 lv이 더 높았던 것들을 앞으로 보내준다.
-  // if(headLv[1]==0){
-  //   headLv[1] = headLv[2];
-  //   headLv[2] = 0;
-  // }
-  // if(headLv[0]==0){
-  //   headLv[0] = headLv[1];
-  //   headLv[1] = 0;
-  // }
-
-
+  //procdump();//! for debug
+  //checkAllQueue();
+  //mergeQueueToLv0();
+  //procdump();//! for debug
+  //checkAllQueue();
   ptable.globalTicks = 0;
-  procdump();//! for debug
   return;
 }
 
@@ -688,9 +823,9 @@ void
 updateGlobalTicks(void)
 {
   // # when the globalTicks become 100
-  cprintf("gt: %d\n",ptable.globalTicks); //! for debug
+  //cprintf("gt: %d\n",ptable.globalTicks); //! for debug
   if(ptable.globalTicks == 99){
-    // # If schedulerLock is on,
+    // # If scheduler"Lock" is on,
     if(ptable.preferentialProc){
       ptable.firstLv0Proc = ptable.preferentialProc;
       ptable.preferentialProc = 0;
@@ -712,13 +847,20 @@ spendTicks(struct proc *p)
 
   p->ticks--;
   if(p->ticks == 0){
+
+    //# process가 종료된 상황이면, 굳이 level을 변경하거나 할 필요 없음.
+    if(p->state==ZOMBIE){
+      return;
+    }
+
     if(p->level < 2){
+      //cprintf("나(%d) level 높아져서 %d큐에서 나올거야!\n",p->pid,p->level);
       detachNode(p);
       (p->level)++;
-      cprintf("나(%d) level 높아져서 %d큐에 들어간다~\n",p->pid,p->level);
+      //cprintf("나(%d) level 높아져서 %d큐에 들어간다~\n",p->pid,p->level);
       insertTail(p,p->level);
       p->ticks = 2*(p->level)+4;
-      cprintf("나(%d) headLv[%d]in spend time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 );
+      //cprintf("나(%d) headLv[%d]in spend time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 );
       return;
     }
     // If it is at lv2
@@ -736,10 +878,10 @@ execProc(struct proc *p)
 {
   //! for debug
   //printAllNode();
-  if(p->level!=2)
-    cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks);
-  else
-    cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
+  // if(p->level!=2)
+  //   cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks);
+  // else
+  //   cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
 
   struct cpu *c = mycpu();
   // Switch to chosen process.  It is the process's job
@@ -754,8 +896,10 @@ execProc(struct proc *p)
 
   //# tick 줄이기
   spendTicks(p);
-  //updateGlobalTicks();
-  cprintf("나(%d) headLv[%d]in exec time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 );
+  updateGlobalTicks();
+  //cprintf("나(%d) headLv[%d]in exec time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 );
+
+  // ! for debug
   // Process is done running for now.
   // It should have changed its p->state before coming back.
   c->proc = 0;
