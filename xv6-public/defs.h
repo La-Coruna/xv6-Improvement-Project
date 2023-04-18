@@ -128,6 +128,7 @@ int shiftHead(int level);
 void mergeQueueToLv0();
 void printPrevNext(struct proc* p);
 int checkQueue(int level);
+void checkAllQueue1(); // ! for debug
 void printAllNode();
 void setPriority(int pid, int priority);
 int schedulerLock(void);

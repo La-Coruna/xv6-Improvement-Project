@@ -75,8 +75,13 @@ detachNode(struct proc* p)
   // # 1. p가 큐에 혼자일 경우
   if(p->next == p){
     // //cprintf("나는 이 큐에 혼자 있었네?\n");
-    if(p != ptable.headLv[p->level]) // ! for debug
+    if(p != ptable.headLv[p->level]){// ! for debug :)
+    cprintf("lv:%d\n",p->level);
+      cprintf("%d(%d) != %d(%d)\n",p,p->pid , ptable.headLv[p->level],ptable.headLv[p->level]->pid);
+      cprintf("%d, %d, %d\n",ptable.headLv[0] != 0 ? ptable.headLv[0]->pid : 0,ptable.headLv[1] != 0 ? ptable.headLv[1]->pid : 0,ptable.headLv[2] != 0 ? ptable.headLv[2]->pid : 0 );
+      printPrevNext(p);
       panic("process link error");
+    } 
     ptable.headLv[p->level] = 0;
     //cprintf("나 혼자 큐에 있어서 헤드를 바꿨어! HeadLv%d : %d\n",p->level,ptable.headLv[p->level]); // ! for debug
   } 
@@ -751,14 +756,15 @@ schedulerUnlock(void)
     cprintf("scheduler 'UN'lock execute but failed*\n"); // ! for debug
     return 0;
   }
-  //TODO: L0 이동 수정.
+
   checkAllQueue1();
-  ptable.preferentialProc->level = 0;
-  ptable.preferentialProc->priority = 3;
-  ptable.preferentialProc->ticks = 4;
-  if(ptable.preferentialProc->state==ZOMBIE) cprintf("이 경우가 가능??\n*"); // ! for debug
-  detachNode(ptable.preferentialProc);
-  insertHead(ptable.preferentialProc,0);
+  if(ptable.preferentialProc->state!=ZOMBIE){
+    detachNode(ptable.preferentialProc);
+    ptable.preferentialProc->level = 0;
+    ptable.preferentialProc->priority = 3;
+    ptable.preferentialProc->ticks = 4;
+    insertHead(ptable.preferentialProc,0);
+  }
 
   // # 먼저 스캐줄링 해야하는 프로세스를 없앤다.
   ptable.preferentialProc = 0;
@@ -775,11 +781,11 @@ void
 priorityBoosting(void)
 {
   //struct proc *p;
-  procdump();       //! for debug
-  checkAllQueue();  //! for debug
+  //procdump();       //! for debug
+  //checkAllQueue();  //! for debug
   mergeQueueToLv0();
-  procdump();       //! for debug
-  checkAllQueue();  //! for debug
+  //procdump();       //! for debug
+  //checkAllQueue1();  //! for debug
   ptable.globalTicks = 0;
   return;
 }
@@ -794,7 +800,16 @@ updateGlobalTicks(void)
   if(ptable.globalTicks == 99){
     // # If scheduler"Lock" is on,
     if(ptable.preferentialProc){
-//TODO sechdulerUnlock 해줘야함.
+
+      if(ptable.preferentialProc->state!=ZOMBIE){
+        //checkAllQueue1();  //! for debug
+        detachNode(ptable.preferentialProc);
+        ptable.preferentialProc->level = 0;
+        ptable.preferentialProc->priority = 3;
+        ptable.preferentialProc->ticks = 4;
+        insertHead(ptable.preferentialProc,0);
+        //checkAllQueue1();  //! for debug
+      }
       ptable.preferentialProc = 0;
     }
     return priorityBoosting();
@@ -864,9 +879,8 @@ execProc(struct proc *p)
   //# tick 줄이기
   spendTicks(p);
   updateGlobalTicks();
-  //cprintf("나(%d) headLv[%d]in exec time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 );
+  //cprintf("나(%d) headLv[%d]in exec time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 ); // ! for debug
 
-  // ! for debug
   // Process is done running for now.
   // It should have changed its p->state before coming back.
   c->proc = 0;

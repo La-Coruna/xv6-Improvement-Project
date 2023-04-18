@@ -165,6 +165,12 @@ void workload() {
   }
 }
 
+void workload2() {
+  for (int i = 0; i < 300; i++) {
+    workload();
+  }
+}
+
 lock_t print_lock;
 
 void print1(){
@@ -175,7 +181,7 @@ void print1(){
 
 int main(int argc, char *argv[]) {
 	int pid;
-	int num_children = 8;
+	int num_children = 6;
 	lock_init(&print_lock);
 
 	setPriority(3,0);
@@ -190,7 +196,8 @@ int main(int argc, char *argv[]) {
     //setPriority(getpid(),0);
 		
     if(getpid()>=9){
-			schedulerLock(2019019043);
+			//schedulerLock(2019019043);
+      __asm__("int $129");
 		}
 
 
@@ -202,13 +209,12 @@ int main(int argc, char *argv[]) {
 			workload();
 
     if(getpid()>=9){
-			schedulerUnlock(2019019043);
+			//schedulerUnlock(2019019043);
+      __asm__("int $130");
 			//printf(1,"asdfasdfasdfasdfasdffsdafasdfasdfasdfsad");
 		}
-
-		workload();
-		workload();
-		workload();
+    if(getpid()>=9)
+		  workload2();
 
 		lock_acquire(&print_lock);
 		printf(1, "[Completed] PID %d, level %d\n", getpid(), getLevel());
