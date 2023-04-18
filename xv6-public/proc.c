@@ -646,7 +646,6 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  curproc->a=1; // ! for debug
   //cprintf("나(%d) 좀비가 됐오~~\n",curproc->pid);
   printPrevNext(curproc);
   detachNode(curproc);
