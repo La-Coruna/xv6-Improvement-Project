@@ -12,7 +12,6 @@ struct {
   struct proc proc[NPROC];
   int globalTicks;
   struct proc *preferentialProc;
-  struct proc *firstLv0Proc;
   struct proc *headLv[3];
 } ptable;
 
@@ -25,26 +24,13 @@ extern void trapret(void);
 static void wakeup1(void *chan);
 
 // !ptablelock을 얻은 후에만 호출되어야 함!
-// void
-// insertHead(struct proc *newHead, int lvOfHead)
-// {
-//   // # 1. head가 기존에 없는 경우
-//   if(ptable.headLv[lvOfHead] == 0){
-//     newHead->prev = newHead;
-//     newHead->next = newHead;
-//     ptable.headLv[lvOfHead] = newHead;
-//     return;
-//   }
-
-//   // # 2. head가 있는 경우, new process가 새로운 head가 된다.
-//   struct proc* oldHead = ptable.headLv[lvOfHead];
-//   struct proc* tail = oldHead->prev;
-//   tail->next = newHead;
-//   newHead->prev = oldHead->prev;
-//   newHead->next = oldHead;
-//   oldHead->prev = newHead;
-//   return;
-// }
+void
+insertHead(struct proc *newHead, int lvOfHead)
+{
+  insertTail(newHead,lvOfHead);
+  ptable.headLv[lvOfHead] = newHead;
+  return;
+}
 
 // !ptablelock을 얻은 후에만 호출되어야 함!
 void
@@ -74,34 +60,6 @@ insertTail(struct proc *newTail, int lvOfHead)
   head->prev = newTail;
   return;
 }
-
-// void
-// insertTail_allOfQueue(struct proc *srcQ, struct proc *destQ)
-// {
-//   // ! for debug
-//   if(srcQ == destQ)
-//     panic("말도 안됨.");
-//   //cprintf("@@@@insert pid:%d in Lv%d\n",newTail->pid, lvOfHead); // ! for debug
-//   // # 1. head가 기존에 없는 경우, newTail이 head가 된다.
-//   if(ptable.headLv[lvOfHead] == 0){
-//     //cprintf("나 들어가려는데 헤드가 없다! 내가 헤드해야지~\n");
-//     newTail->prev = newTail;
-//     newTail->next = newTail;
-//     ptable.headLv[lvOfHead] = newTail;
-
-//     //checkQueue(lvOfHead); // ! for debug
-//     return;
-//   }
-
-//   // # 2. head가 있는 경우, new process가 새로운 tail가 된다.
-//   struct proc* head = ptable.headLv[lvOfHead];
-//   struct proc* oldTail = head->prev;
-//   oldTail->next = newTail;
-//   newTail->prev = oldTail;
-//   newTail->next = head;
-//   head->prev = newTail;
-//   return;
-// }
 
 // 무조건 큐 안에 있는 노드에만 사용해야함.
 // !ptablelock을 얻은 후에만 호출되어야 함!
@@ -169,7 +127,6 @@ mergeQueueToLv0(){
     // # when Lv0 quqeue is empty
     if(ptable.headLv[0] == 0){
       ptable.headLv[0] = ptable.headLv[i];
-      continue;
     }
     // # when Lv0 queue is non-empty
     else{
@@ -345,6 +302,12 @@ void checkAllQueue(){
   checkQueue(2);
   return;
 }
+void checkAllQueue1(){
+  checkQueue1(0);
+  checkQueue1(1);
+  checkQueue1(2);
+  return;
+}
 
 void
 printAllNode()
@@ -395,7 +358,6 @@ pinit(void)
   initlock(&ptable.lock, "ptable");
   ptable.globalTicks = 0;
   ptable.preferentialProc = 0;
-  ptable.firstLv0Proc = 0;
   ptable.headLv[0] = 0;
   ptable.headLv[1] = 0;
   ptable.headLv[2] = 0;
@@ -781,21 +743,27 @@ schedulerUnlock(void)
 {
   struct proc *curproc = myproc();
   acquire(&ptable.lock);
-  cprintf("scheduler 'UN'lock execute\n"); // ! for debug
+  cprintf(">>>scheduler 'UN'lock execute\n"); // ! for debug
+
+  // # 예외처리 ! 꼭 있어야하나? 애초에 스케줄링이 락 된 상황에서는 다른 프로세스가 실행이 안될텐데.. 인터럽트의 경우 가능하도록?
   if (curproc != ptable.preferentialProc){
     release(&ptable.lock);
-    cprintf("scheduler 'UN'lock execute but failed\n"); // ! for debug
+    cprintf("scheduler 'UN'lock execute but failed*\n"); // ! for debug
     return 0;
   }
   //TODO: L0 이동 수정.
-  ptable.firstLv0Proc = curproc;
-  curproc->level = 0;
-  curproc->priority = 3;
-  curproc->ticks = 4;
+  checkAllQueue1();
+  ptable.preferentialProc->level = 0;
+  ptable.preferentialProc->priority = 3;
+  ptable.preferentialProc->ticks = 4;
+  if(ptable.preferentialProc->state==ZOMBIE) cprintf("이 경우가 가능??\n*"); // ! for debug
+  detachNode(ptable.preferentialProc);
+  insertHead(ptable.preferentialProc,0);
 
-  // # 먼저 스캐줄링 해야하는 프로세스를 없앴다.
+  // # 먼저 스캐줄링 해야하는 프로세스를 없앤다.
   ptable.preferentialProc = 0;
-  cprintf("<<<scheduler 'UN'lock execute success, preferentialProc:%d\n",ptable.preferentialProc); // ! for debug
+  cprintf(">>>scheduler 'UN'lock execute success, preferentialProc:%d\n",ptable.preferentialProc); // ! for debug
+  //checkAllQueue1(); // ! for debug
 
 
   release(&ptable.lock);
@@ -807,11 +775,11 @@ void
 priorityBoosting(void)
 {
   //struct proc *p;
-  //procdump();//! for debug
-  //checkAllQueue();
-  //mergeQueueToLv0();
-  //procdump();//! for debug
-  //checkAllQueue();
+  procdump();       //! for debug
+  checkAllQueue();  //! for debug
+  mergeQueueToLv0();
+  procdump();       //! for debug
+  checkAllQueue();  //! for debug
   ptable.globalTicks = 0;
   return;
 }
@@ -822,11 +790,11 @@ void
 updateGlobalTicks(void)
 {
   // # when the globalTicks become 100
-  //cprintf("gt: %d\n",ptable.globalTicks); //! for debug
+  cprintf("gt: %d\n",ptable.globalTicks); //! for debug
   if(ptable.globalTicks == 99){
     // # If scheduler"Lock" is on,
     if(ptable.preferentialProc){
-      ptable.firstLv0Proc = ptable.preferentialProc;
+//TODO sechdulerUnlock 해줘야함.
       ptable.preferentialProc = 0;
     }
     return priorityBoosting();
@@ -877,10 +845,10 @@ execProc(struct proc *p)
 {
   //! for debug
   //printAllNode();
-  // if(p->level!=2)
-  //   cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks);
-  // else
-  //   cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
+  if(p->level!=2)
+    cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks);
+  else
+    cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
 
   struct cpu *c = mycpu();
   // Switch to chosen process.  It is the process's job
