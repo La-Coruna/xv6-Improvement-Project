@@ -95,7 +95,6 @@ shiftHead(int level)
 // ! ptable.lock을 얻은 후에만 호출되어야 함 !
 void
 mergeQueueToLv0(){
-  // # lv0의 tail에 lv1 삽입 후 lv2를 삽입하는 방식으로 병합. (최대한 기존의 순서를 보장하기 위해.)
   struct proc *p;
 
   // # priority boosting을 위해 L0의 ticks와 priority를 초기화.
@@ -108,6 +107,7 @@ mergeQueueToLv0(){
     }
   }
 
+  // # L1과 L2를 순서대로 L0의 tail에 삽입하여 병합 (최대한 기존의 순서를 보장하기 위해.)
   for(int i = 1; i < 3; i++){
     // # 삽입하려는 큐가 비어있을 때, 다음 큐 삽입
     if(ptable.headLv[i] == 0)
@@ -666,14 +666,14 @@ schedulerLock(void)
 {
   acquire(&ptable.lock);
 
-  // # 1. reset global ticks
-  ptable.globalTicks = 0;
-
   // # if there is already a preferentialProc, schedulerLock will be failed
   if(ptable.preferentialProc && ptable.preferentialProc->state == RUNNABLE){
     release(&ptable.lock);
     return 0;
   }
+
+  // # 1. reset global ticks
+  ptable.globalTicks = 0;
 
   // # 2. myproc() become a preferentialProc
   ptable.preferentialProc = myproc();
@@ -815,11 +815,15 @@ findAndExec_RR(int level){
       if(ptable.headLv[level]->state == RUNNABLE){
         p = ptable.headLv[level]; // 실행할 프로세스 저장.
         // # head(다음 스케줄링 시의searchingStartPoint)를 옮긴다. RR의 핵심.
+        // # ( 원형 큐이기 때문에, 이 행위는 실행한 프로세스를 queue의 tail로 넘겨주는 것과 같은 행위. )
         shiftHead(level);
-        execProc(p);  // 실행된 head프로세스가 혼자여서 shift해도 자기가 head였는데, exec하면서 레벨이 전환되면서, head가 사라질 수도 있음.
+        // # execute process
+        execProc(p);  // 실행된 head프로세스가 queue에서 혼자인 경우, exec하면서 레벨이 전환되면서, head가 사라질 수도 있음.
         return 1;
       }
-      // # runnable proc가 아니라면 헤드를 한칸 옮겨준다. ( 원형 큐이기 때문에, 이 행위는 살펴본 프로세스를 tail로 넘겨주는 것과 같은 행위. )
+      // # runnable proc가 아니라면 탐색을 계속하기 위해 head를 한칸 옮겨준다.
+      // # RUNNABLE이 아니여서 실행되지 못한 process도 순서가 뒤로 밀린다.
+      // # ( 원형 큐이기 때문에, 이 행위는 살펴본 프로세스를 queue의 tail로 넘겨주는 것과 같은 행위. )
       shiftHead(level);
       // # 시작했던 큐의 처음 위치까지 돌아오면 탐색 종료
       if(ptable.headLv[level] == searchingStartPoint)
@@ -848,10 +852,11 @@ findAndExec_PRIO(int level){
         // # priority가 0이라면 주저말고 실행
         if(ptable.headLv[level]->priority == 0){
           p = ptable.headLv[level]; // 실행할 프로세스 저장.
-          // # prio queue 에서는 rr 처럼 shiftHead(다음 스케줄링 시의searchingStartPoint를 옮김)을 해주지 않는다. FCFS를 보장하기 위해서.
-          // # 대신 반대로 head를 큐의 처음 위치로 옮겨놓음. (FSFC 보장)
+          // # prio scheduling 에서는 rr 처럼 shiftHead(다음 스케줄링 시의searchingStartPoint를 옮김)을 해주지 않는다. FCFS를 보장하기 위해서.
+          // # 대신 RR과 달리, 탐색을 위해 이동한 head를 큐의 처음 위치(탐색 시작 위치)로 옮겨놓음. (FCFS 보장)
           ptable.headLv[level] = searchingStartPoint;
-          execProc(p);  // 실행된 head프로세스가 혼자여서 shift해도 자기가 head였는데, exec하면서 레벨이 전환되면서, head가 사라질 수도 있음.
+          // # execute process
+          execProc(p);  // 실행된 head프로세스가 queue에서 혼자인 경우, exec하면서 레벨이 전환되면서, head가 사라질 수도 있음.
           return 1;
         }
 
@@ -864,7 +869,7 @@ findAndExec_PRIO(int level){
           firstPrio3Proc = ptable.headLv[level];
       }
 
-      // # runnable proc가 아니라면 헤드를 한칸 옮겨준다. ( 원형 큐이기 때문에, 이 행위는 살펴본 프로세스를 tail로 넘겨주는 것과 같은 행위. )
+      // # runnable proc가 아니라면 헤드를 한칸 옮겨준다. 다음 process를 탐색하기 위해
       shiftHead(level);
 
       // # 시작했던 큐의 처음 위치까지 돌아오면 탐색 종료

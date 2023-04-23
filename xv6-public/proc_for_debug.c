@@ -689,15 +689,16 @@ schedulerLock(void)
   acquire(&ptable.lock);
   cprintf("<<<scheduler Lock execute, pid:%d\n",myproc()->pid); // ! for debug
 
-  // # 1. reset global ticks
-  ptable.globalTicks = 0;
-
   // # if there is already a preferentialProc, schedulerLock will be failed
   if(ptable.preferentialProc && ptable.preferentialProc->state == RUNNABLE){
     release(&ptable.lock);
     cprintf("<<<scheduler Lock execute but failed, preferentialProc:*%d\n",ptable.preferentialProc); // ! for debug
     return 0;
   }
+  
+  // # 1. reset global ticks
+  ptable.globalTicks = 0;
+
 
   // # 2. myproc() become a preferentialProc
   ptable.preferentialProc = myproc();
