@@ -138,218 +138,6 @@ mergeQueueToLv0(){
   }  
 }
 
-void printPrevNext(struct proc* p){
-  cprintf("(%d<-)%d(->%d)\n",p->prev != 0 ? p->prev->pid : 0 , p->pid ,p->next != 0 ? p->next->pid : 0 );
-}
-
-int
-checkQueue1(int level)
-{
-  cprintf("check queue Lv%d \n",level);
-  struct proc *head = ptable.headLv[level];
-  struct proc *p = head;
-  if (head == 0){
-    cprintf("Lv%d is empty queue.\n",level);
-    return 0;
-  }
-  // # next test
-  cprintf("next test : ");
-  while(1){
-    // ! 다른 레벨이 큐에 들어온 에러케이스
-    if(p->level != level){
-      cprintf("pid:(%d<-)%d(->%d) (lv:%d) is in Lv%d queue.*\n",p->prev->pid,p->pid,p->next->pid,p->level,level);
-      printAllNode();
-      procdump();
-      while(1)
-        ;
-      //return -1;
-    }
-    cprintf("%d",p->pid);
-
-    // ! next가 0인 에러케이스
-    if(p->next == 0){
-      cprintf("pid:%d's next is 0\n",p->pid);
-      return -1;
-    }
-
-
-    cprintf("(->%d) ", p->next->pid);
-    if(p->next == p && p != head){
-      cprintf("pid:(%d<-)%d(->%d)'s next is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
-      printAllNode();
-      while(1)
-        ;
-     // return -1;
-    }
-    if(p->next == head)
-      break;
-    else
-      p = p->next;
-  }
-
-
-
-  p = head;
-  cprintf("\nprev test : ");
-  while(1){
-    cprintf("%d",p->pid);
-    if(p->prev == 0){
-      cprintf("pid:%d's prev is 0\n",p->pid);
-      printAllNode();
-      while(1)
-        ;
-      //return -1;
-    }
-    cprintf("(->%d) ", p->prev->pid);
-    if(p->prev == p && p != head){
-      cprintf("pid:(%d<-)%d(->%d)'s prev is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
-      printAllNode();
-      while(1)
-        ;
-      //return -1;
-    }
-    if(p->prev == head)
-      break;
-    else
-      p = p->prev;
-  }
-
-  cprintf("\ncheck is successed\n");
-  return 1;
-}
-
-int
-checkQueue(int level)
-{
-  //cprintf("check queue Lv%d \n",level);
-  struct proc *head = ptable.headLv[level];
-  struct proc *p = head;
-  if (head == 0){
-    //cprintf("Lv%d is empty queue.\n",level);
-    return 0;
-  }
-  // # next test
-  //cprintf("next test : ");
-  while(1){
-    // ! 다른 레벨이 큐에 들어온 에러케이스
-    if(p->level != level){
-      cprintf("pid:(%d<-)%d(->%d) (lv:%d) is in Lv%d queue.*\n",p->prev->pid,p->pid,p->next->pid,p->level,level);
-      printAllNode();
-      procdump();
-      while(1)
-        ;
-      //return -1;
-    }
-    //cprintf("%d",p->pid);
-
-    // ! next가 0인 에러케이스
-    if(p->next == 0){
-      cprintf("pid:%d's next is 0\n",p->pid);
-      return -1;
-    }
-
-
-    //cprintf("(->%d) ", p->next->pid);
-    if(p->next == p && p != head){
-      cprintf("pid:(%d<-)%d(->%d)'s next is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
-      printAllNode();
-      while(1)
-        ;
-     // return -1;
-    }
-    if(p->next == head)
-      break;
-    else
-      p = p->next;
-  }
-
-
-
-  p = head;
-  //cprintf("\nprev test : ");
-  while(1){
-    //cprintf("%d",p->pid);
-    if(p->prev == 0){
-      cprintf("pid:%d's prev is 0\n",p->pid);
-      printAllNode();
-      while(1)
-        ;
-      //return -1;
-    }
-    //cprintf("(->%d) ", p->prev->pid);
-    if(p->prev == p && p != head){
-      cprintf("pid:(%d<-)%d(->%d)'s prev is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
-      printAllNode();
-      while(1)
-        ;
-      //return -1;
-    }
-    if(p->prev == head)
-      break;
-    else
-      p = p->prev;
-  }
-
-  //cprintf("\ncheck is successed\n");
-  return 1;
-}
-
-void checkAllQueue(){
-  checkQueue(0);
-  checkQueue(1);
-  checkQueue(2);
-  return;
-}
-void checkAllQueue1(){
-  checkQueue1(0);
-  checkQueue1(1);
-  checkQueue1(2);
-  return;
-}
-
-void
-printAllNode()
-{
-  static char *states[] = {
-  [UNUSED]    "unused",
-  [EMBRYO]    "embryo",
-  [SLEEPING]  "sleep ",
-  [RUNNABLE]  "runble",
-  [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
-  };
-  struct proc *p;
-  cprintf("-------------------------------------\n");
-  for(int i = 0; i < 3; i++){
-    cprintf("Lv%d queue : ",i);
-    if(ptable.headLv[i]==0){
-      cprintf("empty\n");
-      continue;
-    }
-    // error
-    else if(ptable.headLv[i]->next == 0){
-      cprintf("error"); // ! for debug
-      panic("procces link error");
-    }
-    for(p=ptable.headLv[i] ; ; p=p->next){
-      char* state;
-      if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
-        state = states[p->state];
-      else
-        state = "???";
-      if(i<2)
-        cprintf("%d(%s) ",p->pid, state);
-      else
-        cprintf("%d(%s, %d) ",p->pid, state,p->priority);
-      if(p->next==ptable.headLv[i])
-        break;        
-    }
-    cprintf("\n");
-  }
-  cprintf("-------------------------------------\n");
-  return;
-}
-
 void
 pinit(void)
 {
@@ -556,7 +344,7 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&ptable.lock);
-  cprintf("fork: 나(%d)가 (%d)를 만들었어.\n",curproc->pid,np->pid); // ! for debug
+
   return pid;
 }
 
@@ -1129,4 +917,143 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+
+// ! for debuging
+// ! 아래 함수는 전부 디버깅을 위한 함수이며, 디버깅 시에만 호출된다.
+// 해당 process에 연결된 process들의 pid를 출력한다.
+void
+printPrevNext(struct proc* p)
+{
+  cprintf("(%d<-)%d(->%d)\n",p->prev != 0 ? p->prev->pid : 0 , p->pid ,p->next != 0 ? p->next->pid : 0 );
+}
+
+// queue에 이상이 있는지 check한다.
+int
+checkQueue(int level)
+{
+  cprintf("check queue Lv%d \n",level);
+  struct proc *head = ptable.headLv[level];
+  struct proc *p = head;
+  if (head == 0){
+    cprintf("Lv%d is empty queue.\n",level);
+    return 0;
+  }
+  // # next test
+  cprintf("next test : ");
+  while(1){
+    // ! 다른 레벨이 큐에 들어온 에러케이스
+    if(p->level != level){
+      cprintf("pid:(%d<-)%d(->%d) (lv:%d) is in Lv%d queue.*\n",p->prev->pid,p->pid,p->next->pid,p->level,level);
+      printAllNode();
+      procdump();
+      while(1)
+        ;
+      //return -1;
+    }
+    cprintf("%d",p->pid);
+
+    // ! next가 0인 에러케이스
+    if(p->next == 0){
+      cprintf("pid:%d's next is 0\n",p->pid);
+      return -1;
+    }
+
+
+    cprintf("(->%d) ", p->next->pid);
+    if(p->next == p && p != head){
+      cprintf("pid:(%d<-)%d(->%d)'s next is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
+      printAllNode();
+      while(1)
+        ;
+     // return -1;
+    }
+    if(p->next == head)
+      break;
+    else
+      p = p->next;
+  }
+
+  p = head;
+  cprintf("\nprev test : ");
+  while(1){
+    cprintf("%d",p->pid);
+    if(p->prev == 0){
+      cprintf("pid:%d's prev is 0\n",p->pid);
+      printAllNode();
+      while(1)
+        ;
+      //return -1;
+    }
+    cprintf("(->%d) ", p->prev->pid);
+    if(p->prev == p && p != head){
+      cprintf("pid:(%d<-)%d(->%d)'s prev is self. infinite loop error.*\n", p->prev->pid,p->pid,p->next->pid);
+      printAllNode();
+      while(1)
+        ;
+      //return -1;
+    }
+    if(p->prev == head)
+      break;
+    else
+      p = p->prev;
+  }
+
+  cprintf("\ncheck is successed\n");
+  return 1;
+}
+
+// 모든 queue에 이상이 있는지 check한다.
+void
+checkAllQueue()
+{
+  checkQueue(0);
+  checkQueue(1);
+  checkQueue(2);
+  return;
+}
+
+// 모든 queue를 출력한다.
+void
+printAllNode()
+{
+  static char *states[] = {
+  [UNUSED]    "unused",
+  [EMBRYO]    "embryo",
+  [SLEEPING]  "sleep ",
+  [RUNNABLE]  "runble",
+  [RUNNING]   "run   ",
+  [ZOMBIE]    "zombie"
+  };
+  struct proc *p;
+  cprintf("-------------------------------------\n");
+  for(int i = 0; i < 3; i++){
+    cprintf("Lv%d queue : ",i);
+    if(ptable.headLv[i]==0){
+      cprintf("empty\n");
+      continue;
+    }
+    // error
+    else if(ptable.headLv[i]->next == 0){
+      cprintf("error"); // ! for debug
+      panic("procces link error");
+    }
+    for(p=ptable.headLv[i] ; ; p=p->next){
+      char* state;
+      if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+        state = states[p->state];
+      else
+        state = "???";
+      if(i<2)
+        cprintf("%d(%s) ",p->pid, state);
+      else
+        cprintf("%d(%s, %d) ",p->pid, state,p->priority);
+      if(p->next==ptable.headLv[i])
+        break;        
+    }
+    cprintf("\n");
+  }
+  cprintf("-------------------------------------\n");
+  return;
 }

@@ -126,10 +126,6 @@ void insertTail(struct proc *newTail);
 void detachNode(struct proc *);
 int shiftHead(int level);
 void mergeQueueToLv0();
-void printPrevNext(struct proc* p);
-int checkQueue(int level);
-void checkAllQueue1(); // ! for debug
-void printAllNode();
 void setPriority(int pid, int priority);
 int schedulerLock(void);
 int schedulerUnlock(void);
@@ -139,6 +135,11 @@ void spendTicks(struct proc*);
 void execProc(struct proc*);
 int findAndExec_RR(int level);
 int findAndExec_PRIO(int level);
+// for debuging
+void printPrevNext(struct proc* p);
+int checkQueue(int level);
+void checkAllQueue();
+void printAllNode();
 
 // swtch.S
 void            swtch(struct context**, struct context*);
