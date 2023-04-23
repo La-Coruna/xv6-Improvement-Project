@@ -566,6 +566,13 @@ spendTicks(struct proc *p)
 void
 execProc(struct proc *p)
 {
+  /* 
+  // ! for debug
+  if(p->level!=2)
+    cprintf("process[%d](%s) exec. lv-ticks: %d-%d\n",p->pid, p->name, p->level, p->ticks);
+  else
+    cprintf("process[%d](%s) exec. lv-prio-ticks: %d-%d-%d\n",p->pid, p->name, p->level, p->priority,p->ticks);
+  */
   struct cpu *c = mycpu();
   // Switch to chosen process.  It is the process's job
   // to release ptable.lock and then reacquire it

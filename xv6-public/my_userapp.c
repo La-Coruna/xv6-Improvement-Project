@@ -1,233 +1,147 @@
-// #include "types.h"
-// #include "stat.h"
-// #include "user.h"
-
-// #define NUM_LOOP 100000
-// #define NUM_YIELD 20000
-// #define NUM_SLEEP 1000
-
-// #define NUM_THREAD 4
-// #define MAX_LEVEL 5
-
-// int parent;
-
-// int fork_children()
-// {
-//   int i, p;
-//   for (i = 0; i < NUM_THREAD; i++)
-//     if ((p = fork()) == 0)
-//     {
-//       sleep(10);
-//       return getpid();
-//     }
-//   return parent;
-// }
-
-
-// int fork_children2()
-// {
-//   int i, p;
-//   for (i = 0; i < NUM_THREAD; i++)
-//   {
-//     if ((p = fork()) == 0)
-//     {
-//       sleep(300);
-//       return getpid();
-//     }
-//     else
-//     {
-//       setPriority(p, i); // setPriority는 void
-//       int r = 1;
-//       if (r < 0)
-//       {
-//         printf(1, "setPriority returned %d\n", r);
-//         exit();
-//       }
-//     }
-//   }
-//   return parent;
-// }
-
-// int max_level;
-
-// int fork_children3()
-// {
-//   int i, p;
-//   for (i = 0; i < NUM_THREAD; i++)
-//   {
-//     if ((p = fork()) == 0)
-//     {
-//       sleep(10);
-//       max_level = i;
-//       return getpid();
-//     }
-//   }
-//   return parent;
-// }
-// void exit_children()
-// {
-//   if (getpid() != parent)
-//     exit();
-//   while (wait() != -1);
-// }
-
-// int main(int argc, char *argv[])
-// {
-//   int i, pid;
-//   int count[MAX_LEVEL] = {0};
-// //  int child;
-
-//   parent = getpid();
-
-//   printf(1, "MLFQ test start\n");
-
-//   printf(1, "[Test 1] default\n");
-//   pid = fork_children();
-
-//   if (pid != parent)
-//   {
-//     for (i = 0; i < NUM_LOOP; i++)
-//     {
-//       int x = getLevel();
-//       if (x < 0 || x > 4)
-//       {
-//         printf(1, "Wrong level: %d\n", x);
-//         exit();
-//       }
-//       count[x]++;
-//     }
-//     printf(1, "Process %d\n", pid);
-//     for (i = 0; i < MAX_LEVEL; i++)
-//       printf(1, "L%d: %d\n", i, count[i]);
-//   }
-//   exit_children();
-//   printf(1, "[Test 1] finished\n");
-//   printf(1, "done\n");
-//   exit();
-// }
-
-
-// #include "types.h"
-// #include "stat.h"
-// #include "user.h"
-
-// int
-// main(int argc, char *argv[])
-// {
-// 	// if(strcmp(argv[1], "\"user\"") !=0){
-// 	// 	exit();
-// 	// }	
-//   //int password = 2019019043;
-
-//   __asm__("int $129");
-//   __asm__("int $130");
-
-
-// 	char *buf= "Hello xv6!";
-// 	int ret_val;
-// 	ret_val = myfunction(buf);
-
-//   schedulerLock(300);
-//   schedulerLock(500);
-//   setPriority(1234,5678);
-
-// 	printf(1, "Return value : 0x%x\n", ret_val);
-// 	exit();
-// };
-
 #include "types.h"
-#include "user.h"
 #include "stat.h"
-
-typedef volatile int lock_t;
-
-void lock_init(lock_t *lock) {
-  *lock = 0;
-}
-
-void lock_acquire(lock_t *lock) {
-  while (1) {
-    if (*lock == 0) {
-      *lock = 1;
-      break;
-    }
-  }
-}
-
-void lock_release(lock_t *lock) {
-  *lock = 0;
-}
+#include "user.h"
 
 void workload() {
   int i;
   for (i = 0; i < 2000000; i++) {
-    asm("nop");
+    __asm__("nop");
   }
 }
 
-void workload2() {
-  for (int i = 0; i < 10; i++) {
-    if(getpid()==5) yield();
-    printf(1, "@%d@",getpid());
-    workload();
+void test_rr();
+void test_priority();
+
+int main(int argc, char *argv[])
+{
+  if(argc <= 1){
+    printf(1,"Error: Insufficient arguments.\nPlease input 1~2\n");
+    exit();
   }
-}
-void workload1() {
-  for (int i = 0; i < 10; i++) {
-    workload();
-  }
-}
-void workload3() {
-  for (int i = 0; i < 300; i++) {
-    workload();
-  }
+
+  if(strcmp(argv[1], "1") == 0){
+	 	test_rr();
+	}	
+  if(strcmp(argv[1], "2") == 0){
+	 	test_priority();
+	}	
+
+  return 0;
 }
 
-lock_t print_lock;
-
-void print1(){
-  lock_acquire(&print_lock);
-  //printf(1, "PID %d, level %d\n", getpid(), getLevel());
-  lock_release(&print_lock);
-}
-
-int main(int argc, char *argv[]) {
+// priority test
+// ! 예상 결과 값: pid가 높은 자식이 queue에는 늦게 들어갔지만 priority가 높게 설정되기 때문에 
+// !              L2까지 실행되면 더 빨리 종료된다.
+void test_priority() {
 	int pid;
-	int num_children = 62;
-	int ffnum = 0;
+	int num_children = 4;
+  
+  // # schedulerLock을 하여 fork를 하여도 자식들이 실행되지 못하게 막음.
+  schedulerLock(2019019043);
 
-	//setPriority(3,0);
-  //schedulerLock(2019019043);
-  __asm__("int $129");
+  // # fork를 통해 num_children만큼 process를 생성한다.
 	for (int i = 0; i < num_children; i++) {
     pid = fork();
-    //#
+    
+    // # fork에 실패한 경우
     if (pid < 0) {
       printf(1, "fork failed\n");
-      ffnum++;
       exit();
-    } else if (pid == 0) {
-      
+    }
 
-      workload1();
+    // # 부모인 경우.
+    else if(pid > 0){
+      
+      // # 자식 순서대로 priority 3~0 으로 설정
+      setPriority(pid,3-i);
+    }
+
+    // # child일 경우
+    else if (pid == 0) {
+      // # priority에 따른 실행 순서를 보기 위해 L2가 될 때까지 실행.
+      while(getLevel()!=2)
+        workload();
+      
+      // # L2가 되고 나서의 실행
+      for(int i = 0; i<20; i++){
+        workload();
+      }
+      printf(1,"process[%d] exit\n", getpid());
+      exit();
+    }
+    
+	}
+  
+
+  // # 아래는 parent의 코드.
+
+  // # MLFQ scheduler로 돌아와 자식들의 실행 시작.
+  schedulerUnlock(2019019043);
+
+  // # 자식들을 기다림
+  for (int i = 0; i < num_children; i++) {
+    wait();
+  }
+
+  printf(1, "All children completed\n");
+  exit();
+
+}
+
+
+// RR test
+// ! RR로 동작하는 것을 보기 위해
+// ! proc.c의 execProc 시작 시 디버깅을 위한 출력문을 삽입함.
+/* 
+  // ! for debug
+  if(p->level!=2)
+    cprintf("process[%d](%s) exec. lv-ticks: %d-%d\n",p->pid, p->name, p->level, p->ticks);
+  else
+    cprintf("process[%d](%s) exec. lv-prio-ticks: %d-%d-%d\n",p->pid, p->name, p->level, p->priority,p->ticks);
+*/
+void test_rr() {
+	int pid;
+	int num_children = 3;
+  
+  // # schedulerLock을 하여 fork를 하여도 자식들이 실행되지 못하게 막음.
+  schedulerLock(2019019043);
+
+  // # fork를 통해 num_children만큼 process를 생성한다.
+	for (int i = 0; i < num_children; i++) {
+    pid = fork();
+    
+    // # fork에 실패한 경우
+    if (pid < 0) {
+      printf(1, "fork failed\n");
+      exit();
+    }
+
+    // # 부모인 경우.
+    else if(pid > 0){
+      printf(1, "Create process[%d]\n", pid);
+    }
+
+    // # child일 경우
+    else if (pid == 0) {
+      while(getLevel()!=2)
+        workload();
 
       exit();
     }
-    //#
+    
 	}
 
-	// setPriority(6,2);
-	// setPriority(7,2);
-	// setPriority(8,1);
-	// setPriority(9,1);
-	// setPriority(10,0);
-	// setPriority(11,0);
+  // # 아래는 parent의 코드.
+
+  // # MLFQ scheduler로 돌아와 자식들의 실행 시작.
   schedulerUnlock(2019019043);
 
-	for (int i = 0; i < num_children-ffnum; i++) {
-	  wait();
-	}
+  // # 자식들을 기다림
+  for (int i = 0; i < num_children; i++) {
+    wait();
+  }
 
-	printf(1, "All children completed\n");
-	exit();
+  printf(1, "All children completed\n");
+  exit();
+
 }
