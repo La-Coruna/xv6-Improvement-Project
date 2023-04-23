@@ -37,9 +37,7 @@ sys_myfunction(void)
 void
 sys_yield(void)
 {
-	cprintf("sys_yield 호출됨!\n");
-	yield();
-	return;
+	return yield();
 }
 
 int
@@ -52,9 +50,9 @@ void
 sys_setPriority(void)
 {
 	int pid, priority;
-	if (argint(0,&pid)<0 || argint(1,&priority))
+	if (argint(0,&pid)<0 || argint(1,&priority)<0)
 		return;
-	cprintf("setPriority pid: %d, priority: %d\n",pid,priority);
+	//cprintf("setPriority pid: %d, priority: %d\n",pid,priority);
 	setPriority(pid,priority);
 	return;
 }
@@ -63,32 +61,46 @@ void
 sys_schedulerLock(void)
 {
 	int password;
-	if (argint(0,&password)<0){
-		cprintf("should input password\n");
+	if (argint(0,&password)<0)
 		return;
-	}
+
   else if(password != 2019019043){
     struct proc *p = myproc();
-    cprintf("schedulerLock is failed\npid: %d, ticks: %d, level: %d\n",p->pid, (2*(p->level)+4) - p->ticks, p->level);
+    cprintf("Wrong password. SchedulerLock is failed.\n");
+    cprintf("pid: %d, ticks: %d, level: %d\n",p->pid, (2*(p->level)+4) - (p->ticks), p->level);
     exit();
   }
+
 	schedulerLock();
-	return;
+
+	/* for debug */
+	// if(schedulerLock())
+	// 	cprintf("SchedulerLock is successed.\n");
+	// else
+	// 	cprintf("Already SchedulerLock is on.\n");
+	// return;
 }
 
 void
 sys_schedulerUnlock(void)
 {
 	int password;
-	if (argint(0,&password)<0){
-		cprintf("should input password\n");
+	if (argint(0,&password)<0)
 		return;
+
+	else if(password != 2019019043){
+		struct proc *p = myproc();
+		cprintf("Wrong password. SchedulerUnlock is failed.\n");
+    cprintf("pid: %d, ticks: %d, level: %d\n",p->pid, (2*(p->level)+4) - (p->ticks), p->level);
+		exit();
 	}
-  else if(password != 2019019043){
-    struct proc *p = myproc();
-    cprintf("schedulerUnlock is failed\npid: %d, ticks: %d, level: %d\n",p->pid, (2*(p->level)+4) - p->ticks, p->level);
-    exit();
-  }
+
 	schedulerUnlock();
-	return;
+
+	/* for debug */
+	// if(schedulerUnlock())
+	// 	cprintf("SchedulerUnlock is successed.\n");
+	// else
+	// 	cprintf("Already current scheduler is for MLFQ.\n");
+	// return;
 }
