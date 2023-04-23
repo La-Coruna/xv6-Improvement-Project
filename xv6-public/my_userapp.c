@@ -166,6 +166,18 @@ void workload() {
 }
 
 void workload2() {
+  for (int i = 0; i < 10; i++) {
+    if(getpid()==5) yield();
+    printf(1, "@%d@",getpid());
+    workload();
+  }
+}
+void workload1() {
+  for (int i = 0; i < 10; i++) {
+    workload();
+  }
+}
+void workload3() {
   for (int i = 0; i < 300; i++) {
     workload();
   }
@@ -181,58 +193,39 @@ void print1(){
 
 int main(int argc, char *argv[]) {
 	int pid;
-	int num_children = 6;
-	lock_init(&print_lock);
+	int num_children = 62;
+	int ffnum = 0;
 
-	setPriority(3,0);
-
+	//setPriority(3,0);
+  //schedulerLock(2019019043);
+  __asm__("int $129");
 	for (int i = 0; i < num_children; i++) {
-	pid = fork();
-	if (pid < 0) {
-		printf(1, "fork failed\n");
-		exit();
-	} else if (pid == 0) {
-		
-    //setPriority(getpid(),0);
-		
-    if(getpid()>=9){
-			//schedulerLock(2019019043);
-      __asm__("int $129");
-		}
+    pid = fork();
+    //#
+    if (pid < 0) {
+      printf(1, "fork failed\n");
+      ffnum++;
+      exit();
+    } else if (pid == 0) {
+      
 
+      workload1();
 
-		for(int l=getLevel();l==0;l=getLevel())
-			workload();
-
-
-		for(int l=getLevel();l<2;l=getLevel())
-			workload();
-
-    if(getpid()>=9){
-			//schedulerUnlock(2019019043);
-      __asm__("int $130");
-			//printf(1,"asdfasdfasdfasdfasdffsdafasdfasdfasdfsad");
-		}
-    if(getpid()>=9)
-		  workload2();
-
-		lock_acquire(&print_lock);
-		printf(1, "[Completed] PID %d, level %d\n", getpid(), getLevel());
-		lock_release(&print_lock);
-
-		exit();
-	}
+      exit();
+    }
+    //#
 	}
 
-	setPriority(6,2);
-	setPriority(7,2);
-	setPriority(8,1);
-	setPriority(9,1);
-	setPriority(10,0);
-	setPriority(11,0);
+	// setPriority(6,2);
+	// setPriority(7,2);
+	// setPriority(8,1);
+	// setPriority(9,1);
+	// setPriority(10,0);
+	// setPriority(11,0);
+  schedulerUnlock(2019019043);
 
-	for (int i = 0; i < num_children; i++) {
-	wait();
+	for (int i = 0; i < num_children-ffnum; i++) {
+	  wait();
 	}
 
 	printf(1, "All children completed\n");

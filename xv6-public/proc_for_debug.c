@@ -63,12 +63,26 @@ insertTail(struct proc *newTail)
 void
 detachNode(struct proc* p)
 {
+  // ! for debug
+  // if(p->prev == 0 || p->next == 0){
+  //   cprintf("나(%d) 이미 큐에서 연결이 끊겼어 ㅜㅜ*\n",p->pid);
+  //   printPrevNext(p);
+  //   return;
+  // }
   // # 1. p가 큐에 혼자일 경우
   if(p->next == p){
+    // ! for debug
+    // if(p != ptable.headLv[p->level]){
+    //   cprintf("lv:%d\n",p->level);
+    //   cprintf("%d, %d, %d\n",ptable.headLv[0] != 0 ? ptable.headLv[0]->pid : 0,ptable.headLv[1] != 0 ? ptable.headLv[1]->pid : 0,ptable.headLv[2] != 0 ? ptable.headLv[2]->pid : 0 );
+    //   printPrevNext(p);
+    //   panic("process link error");
+    // } 
     ptable.headLv[p->level] = 0;
   } 
   // # 2. 혼자가 아닐 경우
   else {
+    //checkQueue(p->level); // ! for debug
     p->prev->next = p->next;
     p->next->prev = p->prev;
     // # 2-1. head일 경우
@@ -85,17 +99,18 @@ int
 shiftHead(int level)
 {
   if(ptable.headLv[level]==0){
+    cprintf("head%d가 없어서 쉬프트가 일어나지 않앗습니다.\n",level);
     return 0;
   }
   ptable.headLv[level] = ptable.headLv[level]->next;
   return 1;
 }
 
-// priority boosting을 위해 priorityBoosting()에서 호출 함.
 // ! ptable.lock을 얻은 후에만 호출되어야 함 !
 void
 mergeQueueToLv0(){
   // # lv0의 tail에 lv1 삽입 후 lv2를 삽입하는 방식으로 병합. (최대한 기존의 순서를 보장하기 위해.)
+
   struct proc *p;
 
   // # priority boosting을 위해 L0의 ticks와 priority를 초기화.
@@ -426,7 +441,11 @@ found:
   p->level = 0; // process가 처음 생성될 때는 lv0으로 시작.
   p->priority = 3;
   p->ticks=4;
-  insertTail(p); // process를 L0의 tail로 삽입.
+  //cprintf("나(%d) 생성돼서 큐에 들어간다~\n",p->pid);
+  checkQueue(0); // ! for debug
+  checkQueue(1); // ! for debug
+  checkQueue(2);  // ! for debug
+  insertTail(p);
 
   release(&ptable.lock);
 
@@ -602,7 +621,10 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  cprintf("나(%d) 좀비가 됐오~~\n",curproc->pid);// ! for debug
+  //printPrevNext(curproc);  // ! for debug
   detachNode(curproc);
+  //cprintf("나 좀비인데 큐에서도 나왔어!!~~\n");// ! for debug
   sched();
   panic("zombie exit");
 }
@@ -665,6 +687,7 @@ int
 schedulerLock(void)
 {
   acquire(&ptable.lock);
+  cprintf("<<<scheduler Lock execute, pid:%d\n",myproc()->pid); // ! for debug
 
   // # 1. reset global ticks
   ptable.globalTicks = 0;
@@ -672,12 +695,14 @@ schedulerLock(void)
   // # if there is already a preferentialProc, schedulerLock will be failed
   if(ptable.preferentialProc && ptable.preferentialProc->state == RUNNABLE){
     release(&ptable.lock);
+    cprintf("<<<scheduler Lock execute but failed, preferentialProc:*%d\n",ptable.preferentialProc); // ! for debug
     return 0;
   }
 
   // # 2. myproc() become a preferentialProc
   ptable.preferentialProc = myproc();
 
+  cprintf("<<<scheduler Lock execute success>>, preferentialProc:%d\n",ptable.preferentialProc->pid); // ! for debug
   release(&ptable.lock);
   return 1;
 }
@@ -687,13 +712,16 @@ schedulerUnlock(void)
 {
   struct proc *curproc = myproc();
   acquire(&ptable.lock);
+  cprintf(">>>scheduler 'UN'lock execute\n"); // ! for debug
 
   // # 예외처리. unlock하는 것이 의미가 없을 때.
   if (curproc != ptable.preferentialProc){
     release(&ptable.lock);
+    cprintf("scheduler 'UN'lock execute but failed*\n"); // ! for debug
     return 0;
   }
 
+  checkAllQueue(); // ! for debug
   if(ptable.preferentialProc->state!=ZOMBIE){
     detachNode(ptable.preferentialProc);
     ptable.preferentialProc->level = 0;
@@ -704,6 +732,9 @@ schedulerUnlock(void)
 
   // # 먼저 스캐줄링 해야하는 프로세스를 없앤다.
   ptable.preferentialProc = 0;
+  cprintf(">>>scheduler 'UN'lock execute success, preferentialProc:%d\n",ptable.preferentialProc); // ! for debug
+  //checkAllQueue1(); // ! for debug
+
 
   release(&ptable.lock);
   return 1;
@@ -714,7 +745,12 @@ schedulerUnlock(void)
 void
 priorityBoosting(void)
 {
+  //struct proc *p;
+  //procdump();       //! for debug
+  //checkAllQueue();  //! for debug
   mergeQueueToLv0();
+  //procdump();       //! for debug
+  //checkAllQueue1();  //! for debug
   ptable.globalTicks = 0;
   return;
 }
@@ -725,16 +761,19 @@ void
 updateGlobalTicks(void)
 {
   // # when the globalTicks become 100
+  //cprintf("gt: %d\n",ptable.globalTicks); //! for debug
   if(ptable.globalTicks == 99){
     // # If scheduler"Lock" is on,
     if(ptable.preferentialProc){
 
       if(ptable.preferentialProc->state!=ZOMBIE){
+        //checkAllQueue1();  //! for debug
         detachNode(ptable.preferentialProc);
         ptable.preferentialProc->level = 0;
         ptable.preferentialProc->priority = 3;
         ptable.preferentialProc->ticks = 4;
         insertHead(ptable.preferentialProc);
+        //checkAllQueue1();  //! for debug
       }
       ptable.preferentialProc = 0;
     }
@@ -750,19 +789,25 @@ updateGlobalTicks(void)
 void
 spendTicks(struct proc *p)
 {
+  if (p->ticks < 1)
+    panic("tick error");
+
   p->ticks--;
   if(p->ticks == 0){
 
-    //# process가 종료된 상황이면, level을 priority를 변경 안함.
+    //# process가 종료된 상황이면, 굳이 level을 변경하거나 할 필요 없음.
     if(p->state==ZOMBIE){
       return;
     }
 
     if(p->level < 2){
+      //cprintf("나(%d) level 높아져서 %d큐에서 나올거야!\n",p->pid,p->level);
       detachNode(p);
       (p->level)++;
+      //cprintf("나(%d) level 높아져서 %d큐에 들어간다~\n",p->pid,p->level);
       insertTail(p);
       p->ticks = 2*(p->level)+4;
+      //cprintf("나(%d) headLv[%d]in spend time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 );
       return;
     }
     // If it is at lv2
@@ -778,6 +823,13 @@ spendTicks(struct proc *p)
 void
 execProc(struct proc *p)
 {
+  //! for debug
+  //printAllNode();
+  // if(p->level!=2)
+  //   cprintf("%d proc exec. lv-ticks: %d-%d\n",p->pid,p->level, p->ticks);
+  // else
+  //   cprintf("%d proc exec. lv-p-ticks: %d-%d-%d\n",p->pid,p->level, p->priority,p->ticks);
+
   struct cpu *c = mycpu();
   // Switch to chosen process.  It is the process's job
   // to release ptable.lock and then reacquire it
@@ -789,9 +841,10 @@ execProc(struct proc *p)
   swtch(&(c->scheduler), p->context);
   switchkvm();
 
-  // # ticks 줄이기 & globalticks 증가
+  //# tick 줄이기
   spendTicks(p);
   updateGlobalTicks();
+  //cprintf("나(%d) headLv[%d]in exec time: %d\n",p->pid,p->level,ptable.headLv[(p->level)] != 0 ? ptable.headLv[(p->level)]->pid : 0 ); // ! for debug
 
   // Process is done running for now.
   // It should have changed its p->state before coming back.
@@ -809,7 +862,7 @@ findAndExec_RR(int level){
 
   // # Queue가 비어 있지 않다면 탐색 시작.
   if(ptable.headLv[level]!=0){
-    
+    //checkQueue(level); // ! for debug
     while(1){
       // # runnable proc 발견
       if(ptable.headLv[level]->state == RUNNABLE){
@@ -829,7 +882,6 @@ findAndExec_RR(int level){
   // # 실행한 process가 없다고 0을 반환하여 알려줌.
   return 0;
 }
-
 int
 findAndExec_PRIO(int level){
   struct proc *p; // 실행시킬 프로세스 변수
@@ -840,7 +892,7 @@ findAndExec_PRIO(int level){
 
   // # Queue가 비어 있지 않다면 탐색 시작.
   if(ptable.headLv[level]!=0){
-
+    //checkQueue(level);
     while(1){
       // # runnable proc 발견
       if(ptable.headLv[level]->state == RUNNABLE){
@@ -866,11 +918,11 @@ findAndExec_PRIO(int level){
 
       // # runnable proc가 아니라면 헤드를 한칸 옮겨준다. ( 원형 큐이기 때문에, 이 행위는 살펴본 프로세스를 tail로 넘겨주는 것과 같은 행위. )
       shiftHead(level);
-
+      //cprintf("%d, %d, %d\n",ptable.headLv[level] , searchingStartPoint,ptable.headLv[level] == searchingStartPoint); // ! for debug
       // # 시작했던 큐의 처음 위치까지 돌아오면 탐색 종료
       if(ptable.headLv[level] == searchingStartPoint)
         break;
-
+      //cprintf("A "); // ! for debug
     }
 
     // # priority가 0인 process를 못 찾았기 때문에 그 아래 우선순위가 있다면 실행 후 리턴.
@@ -907,12 +959,17 @@ scheduler(void)
   c->proc = 0;
 
   for(;;){
+    //cprintf("A"); // ! for debug
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
+    //struct proc *firstLv1Proc = 0;
+
+    if(ptable.preferentialProc)
+      cprintf("preferentialProc: %d\n",ptable.preferentialProc->pid); // ! for debug
     // # EXECUTE ONE PROCESS
     // # If there is a preferential process ( when the schedulerLock is called )
     if(ptable.preferentialProc){
@@ -928,12 +985,14 @@ scheduler(void)
     // # MLFQ SCHEDULING
 
     // # Lv0 scheduling
+    //cprintf("headLv[0] before schedule: %d\n",ptable.headLv[0] != 0 ? ptable.headLv[0]->pid : 0 );
     if(findAndExec_RR(0)){
       release(&ptable.lock);
       continue;
     }
 
     // # Lv1 scheduling
+    //cprintf("headLv[1] before schedule: %d\n",ptable.headLv[1] != 0 ? ptable.headLv[1]->pid : 0 );
     if(findAndExec_RR(1)){
       release(&ptable.lock);
       continue;
@@ -944,6 +1003,7 @@ scheduler(void)
       release(&ptable.lock);
       continue;
     }
+    // cprintf("z "); // ! for debug
     release(&ptable.lock);
   }
 }

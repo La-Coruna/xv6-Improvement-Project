@@ -121,8 +121,8 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 // added by me
-void insertHead(struct proc *newHead, int lvOfHead);
-void insertTail(struct proc *newTail, int lvOfHead);
+void insertHead(struct proc *newHead);
+void insertTail(struct proc *newTail);
 void detachNode(struct proc *);
 int shiftHead(int level);
 void mergeQueueToLv0();

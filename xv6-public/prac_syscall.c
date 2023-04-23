@@ -37,8 +37,8 @@ sys_myfunction(void)
 void
 sys_yield(void)
 {
+	cprintf("sys_yield 호출됨!\n");
 	yield();
-	cprintf("yield\n");
 	return;
 }
 
