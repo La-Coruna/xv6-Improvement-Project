@@ -23,6 +23,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int exec2(char*, char**, int stacksize);
 
 // ulib.c
 int stat(const char*, struct stat*);

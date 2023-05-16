@@ -60,12 +60,11 @@ exec2(char *path, char **argv, int stacksize)
   end_op();
   ip = 0;
 
-  // Allocate two pages at the next page boundary.
-  // Make the first inaccessible.  Use the second as the user stack.
+  // stacksize만큼의 스택용 페이지와 하나의 가드용 페이지를 할당한다.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + stacksize*PGSIZE)) == 0)
+  if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0)
     goto bad;
-  clearpteu(pgdir, (char*)(sz - stacksize*PGSIZE));
+  clearpteu(pgdir, (char*)(sz - (stacksize+1)*PGSIZE));
   sp = sz;
 
   // Push argument strings, prepare rest of stack in ustack.
