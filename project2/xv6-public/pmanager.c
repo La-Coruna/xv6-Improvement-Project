@@ -41,9 +41,6 @@ int getPmgrCmd(char *buf, int nbuf);
 struct pmgrcmd* parsecmd(char *s);
 void runPmgrCmd(struct pmgrcmd *cmd);
 
-// global variable
-char whitespace[] = " \t\r\n\v";
-
 int main(int argc, char *argv[])
 {
   static char buf[100];
@@ -195,6 +192,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     printf(1,"wrong command.\n");
     return;
   }
+  printf(1,"type: %d\n",pmgrcmd->type);
 
   switch(pmgrcmd->type){
   default:
@@ -209,7 +207,6 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   case KILL:
     cmd1 = (struct cmdarg1 *) pmgrcmd;
     printf(1,"kill type: %d\n",cmd1->type);
-    printf(1,"kill pid: %d\n",cmd1->arg);
     printf(1,"kill pid: %s\n",cmd1->arg);
     break;
 
@@ -217,8 +214,17 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     cmd2 = (struct cmdarg2 *) pmgrcmd;
     printf(1,"exec\n");
     printf(1,"exec type: %d\n",cmd2->type);
-    printf(1,"exec pid: %s\n",cmd2->arg1);
-    printf(1,"exec pid: %s\n",cmd2->arg2);
+    printf(1,"exec arg1: %s\n",cmd2->arg1);
+    printf(1,"exec arg2: %s\n",cmd2->arg2);
+    //TODO 임시변수 b에 뭘 넣어줘야하나
+    char * a ="adsf";
+    char ** b =&a;
+    //exec2("ls",b,10);
+    // bcmd = (struct backcmd*)cmd;
+    if(fork() == 0)
+      exec2((char *)cmd2->arg1,b,10);
+    // break;
+
     // ecmd = (struct execcmd*)cmd;
     // if(ecmd->argv[0] == 0)
     //   exit();
