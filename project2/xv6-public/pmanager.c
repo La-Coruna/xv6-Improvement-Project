@@ -212,17 +212,16 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
 
   case EXEC:
     cmd2 = (struct cmdarg2 *) pmgrcmd;
-    printf(1,"exec\n");
-    printf(1,"exec type: %d\n",cmd2->type);
-    printf(1,"exec arg1: %s\n",cmd2->arg1);
-    printf(1,"exec arg2: %s\n",cmd2->arg2);
-    //TODO 임시변수 b에 뭘 넣어줘야하나
-    char * a ="adsf";
-    char ** b =&a;
+
+    printf(1,"exec type: %d, arg1: %s, arg2: %s\n",cmd2->type,cmd2->arg1,cmd2->arg2);
+
+    char * path = (char *) cmd2->arg1;
+    char ** argv = &path;
+
     //exec2("ls",b,10);
     // bcmd = (struct backcmd*)cmd;
     if(fork() == 0)
-      exec2((char *)cmd2->arg1,b,10);
+      exec2(path,argv,10);
     // break;
 
     // ecmd = (struct execcmd*)cmd;
