@@ -64,7 +64,6 @@ skipWhitespace(char ** s, char * es)
   while(*s < es && strchr(WHITESPACE, **s)){
     (*s)++;
   }
-  //printf("in function s : %d\n", *s);
   return;
 }
 
@@ -104,8 +103,6 @@ alloc_cmdarg1(const char *arg)
   cmd = malloc(sizeof(*cmd));
   memset(cmd, 0, sizeof(*cmd));
   cmd->arg = arg;
-  //printf(1,"in arg: %s\n",cmd->arg); // ! for debug
-  //printf(1,"in arg d: %d\n",cmd->arg); // ! for debug
   return (struct pmgrcmd*)cmd;
 }
 
@@ -134,27 +131,11 @@ getPmgrCmd(char *buf, int nbuf)
 struct pmgrcmd*
 parsecmd(char *s)
 {
-  // char *es;
-  // struct cmd *cmd;
-
-  // es = s + strlen(s);
-  // cmd = parseline(&s, es);
-  // peek(&s, es, "");
-  // if(s != es){
-  //   printf(2, "leftovers: %s\n", s);
-  //   panic("syntax");
-  // }
-  // nulterminate(cmd);
-  // return cmd;
-
-  //char *ss; // end of string
   char *es; // end of string
   char *commandName;
   struct pmgrcmd *pmgrcmd = 0;
 
   es = s + strlen(s);
-  printf(1, "input is %s\n",s);
-  printf(1, "zinput is %d\n",strcmp(s,"list"));
 
   // 어떤 명령어인지 확인
   commandName = getWord(&s,es);
@@ -197,7 +178,6 @@ parsecmd(char *s)
     pmgrcmd = alloc_cmdarg0();
     pmgrcmd->type=EXIT;
   }
-  printf(1,"pmgrcmd=%d\n",pmgrcmd);
   return pmgrcmd;
 }
 
@@ -215,10 +195,9 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     printf(1,"wrong command.\n");
     return;
   }
-  //printf(1, "pmgrcmd->type: %d\n",pmgrcmd->type); // ! for debug
+
   switch(pmgrcmd->type){
   default:
-    //panic("runcmd");
     break;
 
   case LIST:
