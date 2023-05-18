@@ -1,5 +1,15 @@
 {
     "files.associations": {
-        "x86.h": "c"
+        "x86.h": "c",
+        "types.h": "c",
+        "param.h": "c",
+        "memlayout.h": "c",
+        "mmu.h": "c",
+        "proc.h": "c",
+        "defs.h": "c",
+        "elf.h": "c",
+        "fcntl.h": "c",
+        "user.h": "c",
+        "stat.h": "c"
     }
 }

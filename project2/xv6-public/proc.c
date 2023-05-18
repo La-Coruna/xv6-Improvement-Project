@@ -130,6 +130,8 @@ userinit(void)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
+  p->sz_limit = 0;
+  p->stacknum = 1;
   memset(p->tf, 0, sizeof(*p->tf));
   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
@@ -160,11 +162,17 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
-
+cprintf("Try to grow process. [pid: %d, current size: %d, demanded size: %d, limit size: %d]\n", curproc->pid, curproc->sz, curproc->sz + n, curproc->sz_limit);
   sz = curproc->sz;
   if(n > 0){
-    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+    if(checkmemorylimit(curproc, n)){ // check if the new size of memory exceed the memory limit of the process
+      if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+        return -1;
+    }
+    else {
+      cprintf("the memory size exceed the limit. [pid: %d, demanded size: %d, limit size: %d]\n", curproc->pid, curproc->sz + n, curproc->sz_limit);
       return -1;
+    }
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
@@ -197,6 +205,8 @@ fork(void)
     return -1;
   }
   np->sz = curproc->sz;
+  np->sz_limit = curproc->sz_limit;
+  np->stacknum = curproc->stacknum;
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
@@ -532,3 +542,68 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+void
+proclist(void)
+{
+  acquire(&ptable.lock);
+  cprintf("----------------- process list -----------------\n");
+
+  struct proc *p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state == RUNNABLE || p->state == RUNNING){
+      cprintf("%s %d %d %d %d\n", p->name, p->pid, p->stacknum, p->sz, p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
+    }
+  }  
+
+
+  cprintf("------------------------------------------------\n");
+  release(&ptable.lock);
+}
+
+// If ok, then return 1.
+// If not ok, then return 0.
+int
+checkmemorylimit(struct proc* p, uint newsz)
+{
+  if(p->sz_limit == 0 || p->sz_limit > p->sz + newsz)
+    return 1;
+  return 0;
+}
+
+// limit은 byte단위. 0 이상의 정수이며, 0인 경우 제한이 없음.
+int
+setmemorylimit(int pid, int limit)
+{
+  acquire(&ptable.lock);
+  uint u_limit = (uint) limit;
+  struct proc *p;
+  struct proc *target_p = 0;
+
+  // finding target process
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      target_p = p;
+      break;
+    }
+  }  
+
+  // If there isn't target or its memory size is already bigger than limit,
+  // then setting memory limit failed.
+  if(target_p == 0 || target_p->sz > u_limit){
+    release(&ptable.lock);
+    return -1;
+  }
+  target_p->sz_limit = u_limit;
+  cprintf("%s %d %d\n", target_p->name, target_p->pid, target_p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
+  
+  //cprintf("set memory limit. pid: %d, limit: %d\n",pid,u_limit);
+
+  release(&ptable.lock);
+  return 0;
+}
+
+// int thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg);
+// void thread_exit(void *retval);
+// int thread_join(thread_t thread, void **retval);

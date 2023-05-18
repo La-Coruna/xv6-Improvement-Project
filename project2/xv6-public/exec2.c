@@ -19,6 +19,10 @@ exec2(char *path, char **argv, int stacksize)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
 
+  if(stacksize < 1 || stacksize > 100){
+    cprintf("exec2: fail\nThe number of stack page must be in 1~100.\n");
+    return -1;
+  }
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -28,6 +32,8 @@ exec2(char *path, char **argv, int stacksize)
   }
   ilock(ip);
   pgdir = 0;
+
+  cprintf("<exec2> path: %s | argv: %s\n",path, *argv); // ! for debug
 
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
@@ -49,7 +55,7 @@ exec2(char *path, char **argv, int stacksize)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0) //@ allocuvm point
       goto bad;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -60,9 +66,10 @@ exec2(char *path, char **argv, int stacksize)
   end_op();
   ip = 0;
 
+
   // stacksize만큼의 스택용 페이지와 하나의 가드용 페이지를 할당한다.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0)
+  if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0) //@ allocuvm point
     goto bad;
   clearpteu(pgdir, (char*)(sz - (stacksize+1)*PGSIZE));
   sp = sz;
@@ -96,6 +103,9 @@ exec2(char *path, char **argv, int stacksize)
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
+  curproc->sz_limit = 0;
+  curproc->stacknum = stacksize;
+  cprintf("<exec2> sz: %d\n",sz); // ! for debug
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);

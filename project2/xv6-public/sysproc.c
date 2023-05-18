@@ -89,3 +89,24 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_proclist(void)
+{
+	proclist();
+  return 1;
+}
+
+
+int
+sys_setmemorylimit(void)
+{
+  int pid, limit, result;
+	if (argint(0,&pid)<0 || argint(1,&limit)<0)
+		return 0;
+	result = setmemorylimit(pid,limit);
+  if(result == -1){
+    cprintf("set memory limit failed.\n");
+  }
+  return 1;
+}

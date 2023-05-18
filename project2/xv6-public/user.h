@@ -24,6 +24,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int exec2(char*, char**, int stacksize);
+int proclist(void);
+int setmemorylimit(int pid, int limit);
 
 // ulib.c
 int stat(const char*, struct stat*);

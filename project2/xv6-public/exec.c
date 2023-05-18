@@ -19,6 +19,10 @@ exec(char *path, char **argv)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
 
+
+
+
+
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -29,6 +33,8 @@ exec(char *path, char **argv)
   ilock(ip);
   pgdir = 0;
 
+  cprintf("<exec> path: %s | argv: %s\n",path, *argv); // ! for debug
+  
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
     goto bad;
@@ -49,7 +55,7 @@ exec(char *path, char **argv)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)  //@ allocuvm point
       goto bad;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -63,7 +69,7 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
+  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)  //@ allocuvm point
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
@@ -97,6 +103,9 @@ exec(char *path, char **argv)
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
+  curproc->sz_limit = 0;
+  curproc->stacknum = 1;
+  cprintf("<exec> sz: %d\n",sz); // ! for debug
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);

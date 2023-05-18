@@ -5,13 +5,17 @@
 #include "user.h"
 
 // Parsed pmanager command representation
+#define WRONGARG  -1
+#define WRONGCMD  0
 #define LIST  1
 #define KILL 2
 #define EXEC  3
 #define MEMLIM  4
 #define EXIT  5
+#define EXEC1  6 // ! for debug
+#define ASDF  99 // ! for debug
 
-#define MAXARGLENGTH 10
+#define MAXARGLENGTH 51
 
 #define WHITESPACE " \t\r\n\v"
 
@@ -85,32 +89,56 @@ getWord(char ** s, char * es)
 }
 
 struct pmgrcmd*
-alloc_cmdarg0(void)
+alloc_cmdarg0(int type)
 {
   struct cmdarg0 *cmd;
   cmd = malloc(sizeof(*cmd));
   memset(cmd, 0, sizeof(*cmd));
+  cmd->type = type;
   return (struct pmgrcmd*)cmd;
 }
 
 struct pmgrcmd*
-alloc_cmdarg1(const char *arg)
+alloc_cmdarg1(int type, const char *arg)
 {
   struct cmdarg1 *cmd;
   cmd = malloc(sizeof(*cmd));
   memset(cmd, 0, sizeof(*cmd));
-  cmd->arg = arg;
+
+  // if argument is wrong
+  if(strcmp(arg,"")==0){
+    cmd->type = WRONGARG;
+    cmd->arg = 0;
+  }
+  // if argument is correct
+  else {
+    cmd->type = type;
+    cmd->arg = arg;
+  }
+
   return (struct pmgrcmd*)cmd;
 }
 
 struct pmgrcmd*
-alloc_cmdarg2(const char *arg1, const char *arg2)
+alloc_cmdarg2(int type, const char *arg1, const char *arg2)
 {
   struct cmdarg2 *cmd;
   cmd = malloc(sizeof(*cmd));
   memset(cmd, 0, sizeof(*cmd));
-  cmd->arg1 = arg1;
-  cmd->arg2 = arg2;
+
+  // if argument is wrong
+  if(strcmp(arg1,"")==0 || strcmp(arg2,"")==0){
+    cmd->type = WRONGARG;
+    cmd->arg1 = 0;
+    cmd->arg2 = 0;
+  }
+  // if argument is correct
+  else {
+    cmd->type = type;
+    cmd->arg1 = arg1;
+    cmd->arg2 = arg2;
+  }
+
   return (struct pmgrcmd*)cmd;
 }
 
@@ -138,43 +166,56 @@ parsecmd(char *s)
   commandName = getWord(&s,es);
   // list
   if (strcmp(commandName,"list")==0){
-    pmgrcmd = alloc_cmdarg0();
-    pmgrcmd->type=LIST;
+    pmgrcmd = alloc_cmdarg0(LIST);
   }
 
   // kill
   else if (strcmp(commandName,"kill")==0){
     // parsing into argument
     char *arg = getWord(&s,es);
-    pmgrcmd = alloc_cmdarg1(arg);
-    pmgrcmd->type=KILL;
+    pmgrcmd = alloc_cmdarg1(KILL,arg);
   }
 
   // execute
   else if (strcmp(commandName,"execute")==0){
-      // parsing into argument
-      char *arg1 = getWord(&s,es);
-      char *arg2 = getWord(&s,es);
-      pmgrcmd = alloc_cmdarg2(arg1,arg2);
-      pmgrcmd->type=EXEC;
-    ;
+    // parsing into argument
+    char *arg1 = getWord(&s,es);
+    char *arg2 = getWord(&s,es);
+    pmgrcmd = alloc_cmdarg2(EXEC,arg1,arg2);
   }
 
   // memlim
   else if (strcmp(commandName,"memlim")==0){
-      // parsing into argument
-      char *arg1 = getWord(&s,es);
-      char *arg2 = getWord(&s,es);
-      pmgrcmd = alloc_cmdarg2(arg1,arg2);
-      pmgrcmd->type=MEMLIM;
-    ;
+    // parsing into argument
+    char *arg1 = getWord(&s,es);
+    char *arg2 = getWord(&s,es);
+    pmgrcmd = alloc_cmdarg2(MEMLIM,arg1,arg2);
   }
 
   // exit
   else if (strcmp(commandName,"exit")==0){
-    pmgrcmd = alloc_cmdarg0();
-    pmgrcmd->type=EXIT;
+    pmgrcmd = alloc_cmdarg0(EXIT);
   }
+
+  // ! for debug
+  // execute1
+  else if (strcmp(commandName,"exec1")==0){
+    // parsing into argument
+    char *arg = getWord(&s,es);
+    pmgrcmd = alloc_cmdarg1(EXEC1,arg);
+  }
+
+  // ! for debug
+  // debug command
+  else if (strcmp(commandName,"asdf")==0){
+    pmgrcmd = alloc_cmdarg0(ASDF);
+  }
+
+  // wrong command
+  else {
+    pmgrcmd = alloc_cmdarg0(WRONGCMD);
+  }
+
   return pmgrcmd;
 }
 
@@ -182,32 +223,49 @@ parsecmd(char *s)
 void
 runPmgrCmd(struct pmgrcmd *pmgrcmd)
 {
-  struct cmdarg0 *cmd0;
+  
   struct cmdarg1 *cmd1;
   struct cmdarg2 *cmd2;
-  // struct memlimcmd *mlcmd;
-
-  // 명세 외의 command를 입력했을 때 예외처리
-  if(pmgrcmd == 0){
-    printf(1,"wrong command.\n");
-    return;
-  }
+  
+  //TODO pid랑 limit, stacksize에 음수 들어오거나 숫자 아닌거 들어왔을 떄 예외처리 해주셈.
+  int pid;
+  int limit;
+  char * path;
+  char ** argv;
+  int stacksize;
+  
   printf(1,"type: %d\n",pmgrcmd->type);
 
   switch(pmgrcmd->type){
   default:
     break;
 
+  // 명세 외의 command를 입력했을 때 예외처리
+  case WRONGCMD:
+    printf(1,"wrong command.\n");
+    break;
+
+  // 인자를 잘못 입력했을 때 예외처리
+  case WRONGARG:
+    printf(1,"wrong argument.\n");
+    break;
+
   case LIST:
     printf(1,"list\n");
-    cmd0 = (struct cmdarg0 *) pmgrcmd;
-    printf(1,"list type: %d\n",cmd0->type);
+    //cmd0 = (struct cmdarg0 *) pmgrcmd;
+    //printf(1,"%d\n",cmd0->type);
+    proclist();
     break;
 
   case KILL:
     cmd1 = (struct cmdarg1 *) pmgrcmd;
-    printf(1,"kill type: %d\n",cmd1->type);
-    printf(1,"kill pid: %s\n",cmd1->arg);
+    pid = atoi(cmd1->arg);
+    if (kill(pid) == -1){
+      printf(1,"killing process whose pid is %d failed.\n",pid);
+    }
+    else{
+      printf(1,"killing process whose pid is %d successed.\n",pid);
+    }
     break;
 
   case EXEC:
@@ -215,29 +273,48 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
 
     printf(1,"exec type: %d, arg1: %s, arg2: %s\n",cmd2->type,cmd2->arg1,cmd2->arg2);
 
-    char * path = (char *) cmd2->arg1;
-    char ** argv = &path;
+    path = (char *) cmd2->arg1;
+    argv = &path;
+    stacksize = atoi(cmd2->arg2);
 
-    //exec2("ls",b,10);
-    // bcmd = (struct backcmd*)cmd;
     if(fork() == 0)
-      exec2(path,argv,10);
-    // break;
+      exec2(path,argv,stacksize);
 
-    // ecmd = (struct execcmd*)cmd;
-    // if(ecmd->argv[0] == 0)
-    //   exit();
-    // exec(ecmd->argv[0], ecmd->argv);
-    // printf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
 
   case MEMLIM:
-    printf(1,"memlim\n");
+    cmd2 = (struct cmdarg2 *) pmgrcmd;
+    printf(1,"memlim type: %d, arg1: %s, arg2: %s\n",cmd2->type,cmd2->arg1,cmd2->arg2);
+    pid = atoi(cmd2->arg1);
+    limit = atoi(cmd2->arg2);
+
+    setmemorylimit(pid,limit);
     break;
 
   case EXIT:
     printf(1,"exit\n");
       exit();
+    break;
+
+  // ! for debug
+  case EXEC1:
+    cmd1 = (struct cmdarg1 *) pmgrcmd;
+
+    printf(1,"exec1 type: %d, arg: %s\n",cmd1->type,cmd1->arg);
+
+    path = (char *) cmd1->arg;
+    argv = &path;
+
+    if(fork() == 0)
+      exec(path,argv);
+
+    break;
+
+  // ! for debug
+  case ASDF:
+    printf(1,"debug command\n");
+
+    sbrk(500);
     break;
 
   // case BACK:
