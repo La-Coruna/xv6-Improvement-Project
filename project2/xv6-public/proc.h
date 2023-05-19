@@ -58,5 +58,3 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
-
-// typedef struct proc thread_t;

@@ -604,6 +604,63 @@ setmemorylimit(int pid, int limit)
   return 0;
 }
 
-// int thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg);
-// void thread_exit(void *retval);
-// int thread_join(thread_t thread, void **retval);
+//TODO
+//proc 내부 멤버 변수 값이 바뀌었을 때 같은 pid를 가진 thread들에게도 업데이트 해주는 함수
+int
+thread_update_proc_info(){
+  
+}
+
+// Create a new thread copying current process as the parent.
+// Sets up stack to return as if from system call.
+// Caller must set state of returned thread to RUNNABLE.
+int
+thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
+{
+  int i, pid, tid;
+  struct thread_t *thread;
+  struct proc *curproc = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){ //TODO alloc thread로 바꿔줘야하나.
+    return -1;
+  }
+
+  // Copy process state from proc.
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz;
+  np->sz_limit = curproc->sz_limit;
+  np->stacknum = curproc->stacknum;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  pid = np->pid;
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
+
+  return pid;
+}
+
+
+
+void thread_exit(void *retval);
+int thread_join(thread_t thread, void **retval);
