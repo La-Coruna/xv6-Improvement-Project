@@ -758,6 +758,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   release(&ptable.lock);
 
   *thread = nt->thread_info.thread_id;
+  curproc->thread_info.main_thread->thread_info.thread_create_num++;
 
   return 0;
 }
@@ -792,9 +793,8 @@ void thread_exit(void *retval)
 
   acquire(&ptable.lock);
 
-  //TODO !!!! join하는게 main thread가 아닐 수 있음
-  cprintf("일어나세요~ chan: %d\n",  curproc);
-  wakeup1(curproc->thread_info.main_thread);
+  // # join하고 있는 쓰레드가 있다면 깨워줌.
+  wakeup1(curproc);
 //@@ exit에서 생략한 부분 start
   // // Parent might be sleeping in wait().
   // wakeup1(curproc->parent); //@ main thread가 exit됐을 때만 해주면 됨. parent 대신 join하고 있는 main thread를 깨워줘야함.
@@ -814,6 +814,7 @@ void thread_exit(void *retval)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  curproc->thread_info.main_thread->thread_info.thread_exit_num++;
   cprintf(" ---------- exit 완료! ---------- \n");
   sched();
   panic("zombie exit");
@@ -825,19 +826,19 @@ int thread_join(thread_t thread, void **retval)
 {
   
   struct proc *p;
-  int havekids;
+  int havethreads;
   struct proc *curproc = myproc();
   
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
-    havekids = 0;
+    havethreads = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->thread_info.thread_id != thread)
         continue; 
       if(p->pid != curproc->pid)
         panic("error: 다른 process의 thread를 기다리고 있다.");
-      havekids = 1;
+      havethreads = 1;
       if(p->state == ZOMBIE){
         cprintf("안 기다림요~~~~~");
         // Found one.
@@ -854,17 +855,26 @@ int thread_join(thread_t thread, void **retval)
         cprintf("in join retval: %d\n",*retval); // ! for debug
         release(&ptable.lock);
         return 0;
+      } else {
+        break;
       }
     }
 
     // No point waiting if we don't have the thread.
-    if(!havekids || curproc->killed){
+    if(!havethreads || curproc->killed){
       release(&ptable.lock);
       return -1;
     }
 
-    cprintf("기다렸다 갈게요~ chan: %d\n",  curproc);
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+    sleep(p, &ptable.lock);  //DOC: wait-sleep
   }
 }
+
+//TODO 2023-05-23
+/* 
+  1. piazza 질문 올린 거 확인하기
+  2. fork, exec, sbrk, kill, sleep 잘 작동하는지 확인하기.
+
+
+*/

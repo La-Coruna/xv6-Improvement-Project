@@ -120,18 +120,12 @@ int sys_thread_create(void)
 		return -1;
   cprintf("<in call> thread: %d, sr: %d, arg: %d\n", (int) thread, start_routine, *(int *)arg);
   return thread_create(thread,start_routine,arg);
-  //return 0;
 }
 void sys_thread_exit(void)
 {
   void *retval;
   if(argptr(0,(char**)&retval,sizeof(retval))<0)
     cprintf("error: argument\n");
-  //cprintf("in exit wrapper: %d\n",*(int *)retval);
-  // while(1){
-  //   cprintf("asfasdfasdfsdf\n");
-  //   continue;
-  // }
   thread_exit(retval);
   return;
 }
