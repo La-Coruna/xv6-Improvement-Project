@@ -35,9 +35,11 @@ struct context {
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct thread_info_t {
-  uint thread_id;
+  thread_t thread_id;
   uint thread_create_num;
   uint thread_exit_num;
+  void* retval;
+  struct proc *main_thread;
 };
 
 // Per-process state

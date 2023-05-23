@@ -113,7 +113,6 @@ sys_setmemorylimit(void)
 
 int sys_thread_create(void)
 {
-  //int thread, limit, result;
   thread_t *thread;
   void *(*start_routine)(void *);
   void *arg;
@@ -125,11 +124,25 @@ int sys_thread_create(void)
 }
 void sys_thread_exit(void)
 {
+  void *retval;
+  if(argptr(0,(char**)&retval,sizeof(retval))<0)
+    cprintf("error: argument\n");
+  //cprintf("in exit wrapper: %d\n",*(int *)retval);
+  // while(1){
+  //   cprintf("asfasdfasdfsdf\n");
+  //   continue;
+  // }
+  thread_exit(retval);
   return;
 }
 int sys_thread_join(void)
 {
-  return 1;
+  thread_t thread;
+  void **retval;
+	if (argint(0,(int*)&thread)<0  || argptr(1,(char**)&retval,sizeof(retval))<0)
+		return -1;
+  cprintf("<in join call> thread: %d\n", (int) thread);
+  return thread_join(thread,retval);
 }
 
 /* 
