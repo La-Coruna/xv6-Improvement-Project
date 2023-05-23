@@ -110,3 +110,35 @@ sys_setmemorylimit(void)
   }
   return 1;
 }
+
+int sys_thread_create(void)
+{
+  //int thread, limit, result;
+  thread_t *thread;
+  void *(*start_routine)(void *);
+  void *arg;
+	if (argptr(0,(char**)&thread, sizeof(thread))<0 || argptr(1,(char**)&start_routine, sizeof(start_routine))<0 || argptr(2,(char**)&arg,sizeof(arg))<0)
+		return -1;
+  cprintf("<in call> thread: %d, sr: %d, arg: %d\n", (int) thread, start_routine, *(int *)arg);
+  return thread_create(thread,start_routine,arg);
+  //return 0;
+}
+void sys_thread_exit(void)
+{
+  return;
+}
+int sys_thread_join(void)
+{
+  return 1;
+}
+
+/* 
+int             thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg);
+void            thread_exit(void *retval);
+int             thread_join(thread_t thread, void **retval);
+ */
+
+void sys_procdump(void)
+{
+  return procdump();
+}

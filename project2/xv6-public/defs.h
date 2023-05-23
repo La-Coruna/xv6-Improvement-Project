@@ -126,6 +126,8 @@ void            yield(void);
 void            proclist(void);
 int             checkmemorylimit(struct proc*, uint);
 int             setmemorylimit(int, int);
+void            thread_init(struct proc *p);
+void            thread_update_proc_info();
 int             thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg);
 void            thread_exit(void *retval);
 int             thread_join(thread_t thread, void **retval);

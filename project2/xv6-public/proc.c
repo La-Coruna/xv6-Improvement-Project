@@ -9,12 +9,14 @@
 
 struct {
   struct spinlock lock;
+  struct spinlock t_lock;  //! 임시 디자인
   struct proc proc[NPROC];
 } ptable;
 
 static struct proc *initproc;
 
 int nextpid = 1;
+int nexttid = 1;           //! 임시 디자인
 extern void forkret(void);
 extern void trapret(void);
 
@@ -24,6 +26,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  initlock(&ptable.t_lock, "ptable_thread");   //! 임시 디자인
 }
 
 // Must be called with interrupts disabled
@@ -88,6 +91,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  thread_init(p);
 
   release(&ptable.lock);
 
@@ -114,6 +118,60 @@ found:
 
   return p;
 }
+
+
+// allocproc과 유사하게 thread로 사용할 proc할당.
+static struct proc*
+allocthread(int mainthread_pid)
+{
+  struct proc *p;
+  char *sp;
+
+  acquire(&ptable.lock);
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state == UNUSED)
+      goto found;
+
+  release(&ptable.lock);
+  return 0;
+
+found:
+  p->state = EMBRYO;
+  p->pid = mainthread_pid;
+  thread_init(p);
+
+  release(&ptable.lock);
+
+  // thread_id 배정.
+  acquire(&ptable.t_lock);
+  p->thread_info.thread_id=nexttid++;
+  release(&ptable.t_lock);
+
+  // Allocate kernel stack.
+  if((p->kstack = kalloc()) == 0){
+    p->state = UNUSED;
+    return 0;
+  }
+  sp = p->kstack + KSTACKSIZE;
+
+  // Leave room for trap frame.
+  sp -= sizeof *p->tf;
+  p->tf = (struct trapframe*)sp;
+
+  // Set up new context to start executing at forkret,
+  // which returns to trapret.
+  sp -= 4;
+  *(uint*)sp = (uint)trapret;
+
+  sp -= sizeof *p->context;
+  p->context = (struct context*)sp;
+  memset(p->context, 0, sizeof *p->context);
+  p->context->eip = (uint)forkret;
+
+  return p;
+}
+
 
 //PAGEBREAK: 32
 // Set up first user process.
@@ -343,6 +401,7 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+//      cprintf("@start@\n");//!
       if(p->state != RUNNABLE)
         continue;
 
@@ -358,6 +417,7 @@ scheduler(void)
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
+      //cprintf("@end@\n"); //!
       c->proc = 0;
     }
     release(&ptable.lock);
@@ -443,6 +503,7 @@ sleep(void *chan, struct spinlock *lk)
   // so it's okay to release lk.
   if(lk != &ptable.lock){  //DOC: sleeplock0
     acquire(&ptable.lock);  //DOC: sleeplock1
+    //acquire13(&ptable.lock,"sleep");
     release(lk);
   }
   // Go to sleep.
@@ -533,7 +594,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %s %s [tid: %d]", p->pid, state, p->name, p->thread_info.thread_id);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -605,10 +666,29 @@ setmemorylimit(int pid, int limit)
 }
 
 //TODO
+
+void
+thread_init(struct proc *p){
+  p->thread_info.thread_id = 0;
+  p->thread_info.thread_create_num = 0;
+  p->thread_info.thread_exit_num = 0;
+  return;
+}
+
+struct proc *
+find_main_thread(struct proc *p){
+  if(p->thread_info.thread_id == 0){
+    return p;
+  }
+  // TODO
+  return 0;
+}
+
 //proc 내부 멤버 변수 값이 바뀌었을 때 같은 pid를 가진 thread들에게도 업데이트 해주는 함수
-int
-thread_update_proc_info(){
-  
+void
+thread_update_proc_info()
+{
+  return ;
 }
 
 // Create a new thread copying current process as the parent.
@@ -617,50 +697,75 @@ thread_update_proc_info(){
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
-  int i, pid, tid;
-  struct thread_t *thread;
+  int i;
+  struct proc *nt;
   struct proc *curproc = myproc();
 
   // Allocate process.
-  if((np = allocproc()) == 0){ //TODO alloc thread로 바꿔줘야하나.
+  if((nt = allocthread(curproc->pid)) == 0){
     return -1;
   }
+  nt->pid = 99; // ! for debug
 
-  // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-    kfree(np->kstack);
-    np->kstack = 0;
-    np->state = UNUSED;
-    return -1;
-  }
-  np->sz = curproc->sz;
-  np->sz_limit = curproc->sz_limit;
-  np->stacknum = curproc->stacknum;
-  np->parent = curproc;
-  *np->tf = *curproc->tf;
+  // Copy necessary information from current process.
+  nt->pgdir = curproc->pgdir;
+  nt->sz = curproc->sz;
+  nt->sz_limit = curproc->sz_limit;
+  nt->stacknum = curproc->stacknum;
+  nt->parent = curproc;
 
-  // Clear %eax so that fork returns 0 in the child.
-  np->tf->eax = 0;
+  *nt->tf = *curproc->tf; //@@
+  nt->tf->eax = 0;        //@@
+
+  nt->tf->eip = (uint)start_routine; //# 이동이 된다!
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
-      np->ofile[i] = filedup(curproc->ofile[i]);
-  np->cwd = idup(curproc->cwd);
+      nt->ofile[i] = filedup(curproc->ofile[i]);
+  nt->cwd = idup(curproc->cwd);
 
-  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+  safestrcpy(nt->name, curproc->name, sizeof(curproc->name));
 
-  pid = np->pid;
+  cprintf("<스택 할당 전>\nnt->tf->esp: %d\n", (int) nt->tf->esp );
+  cprintf("nt->sz: %d, cp->sz: %d\n\n", nt->sz, curproc->sz);
+  // Allocate two pages at the next page boundary.
+  // Make the first inaccessible.  Use the second as the user stack.
+  //TODO
+  uint sz, sp, ustack[3];
+  sz = PGROUNDUP(nt->sz);
+  if((sz = allocuvm(nt->pgdir, sz, sz + 2*PGSIZE)) == 0)  //@ allocuvm point
+    cprintf("에러!!\n");
+  clearpteu(nt->pgdir, (char*)(sz - 2*PGSIZE)); //# 가드페이지 생성
+  sp = sz;
+  nt->sz = sz;
 
+  ustack[0] = 0xffffffff;  // fake return PC
+  ustack[1] = (uint) arg;
+
+  sp -= (2) * 4;
+  if(copyout(nt->pgdir, sp, ustack, 8) < 0)
+    cprintf("에러2!!\n");
+
+  nt->tf->esp = sp;
+  cprintf("<스택 할당 후>\nnt->tf->esp: %d\n", (int) nt->tf->esp );
+  cprintf("nt->sz: %d, cp->sz: %d\n\n", nt->sz, curproc->sz);
+//TODO END
   acquire(&ptable.lock);
-
-  np->state = RUNNABLE;
-
+  nt->state = RUNNABLE;
   release(&ptable.lock);
 
-  return pid;
+  *thread = nt->thread_info.thread_id;
+
+  return 0;
 }
 
 
 
-void thread_exit(void *retval);
-int thread_join(thread_t thread, void **retval);
+void thread_exit(void *retval)
+{
+  return;
+}
+int thread_join(thread_t thread, void **retval)
+{
+  return 0;
+}
