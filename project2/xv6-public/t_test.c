@@ -27,6 +27,22 @@ void *worker(void *arg){
   exit();
 }
 
+void *worker3(void *arg){
+  int ret=2019;
+  workload(100);
+  printf(1,"\n&&&&&&&&&&&\nthread is executing. with arg: %d, &arg:%d\n&&&&&&&&&&&&\n", *(int *)arg, (int)arg);
+  printf(1,"in arg: %d",*(int *)arg);
+  *(int *)arg += 3;
+  printf(1," -> %d\n",*(int *)arg);
+
+  workload(1000);
+  thread_exit(&ret);
+  printf(1,"이게 출력되면 안됨.\n");
+  while(1)
+    ;
+  exit();
+}
+
 void *worker_fork(void *arg){
   int pid;
   int ret = 0;
@@ -54,7 +70,6 @@ void *worker_fork(void *arg){
 
 int t_test_1()
 {
-  //printf(1,"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@~~\n");
   thread_t thread;
   int i=81472;
 
@@ -86,7 +101,6 @@ int t_test_1()
 
 int t_test_2()
 {
-  //printf(1,"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@~~\n");
   thread_t thread;
   int i=81472;
 
@@ -116,8 +130,42 @@ int t_test_2()
   exit();
 }
 
-// fork test
+
 int t_test_3()
+{
+  thread_t thread[2];
+  int arg = 0;
+
+  printf(1, "[thread 여러개 생성 test]\n");
+  for(int i = 0; i < 2 ; i++)
+    thread_create(&thread[i],worker3,&arg);
+  printf(1, "[thread create 직후]\n");
+  procdump(); //@
+
+  workload(200);
+  printf(1,"thread에 의해 바뀐 i값: %d\n\n", arg);
+  printf(1, "[thread 종료 직후]\n");
+  procdump(); //@
+  printf(1, "\n");
+  //printf(1, "<after call> thread: %d, sr: %d, arg: %d\n", thread, worker, &i);
+  //printf(1,"res: %d\n",res);
+  //@@
+  int* retval;
+  printf(1, "[thread join 시작]\n");
+  for(int i = 0; i < 2 ; i++)
+    thread_join(thread[i], (void *) &retval);
+  printf(1,"thread에 의해 retval: %d\n\n", *retval);
+  printf(1, "[thread join 완료 직후]\n");
+  //@@
+  procdump(); //@
+  // for(int a = 0; a < 9999999; a++)
+  //   workload();
+
+  exit();
+}
+
+// fork test
+int t_test_4()
 {
   //printf(1,"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@~~\n");
   thread_t thread;
@@ -164,6 +212,10 @@ int main(int argc, char *argv[])
 
     case 3:
       t_test_3();
+      break;
+
+    case 4:
+      t_test_4();
       break;
   }
 

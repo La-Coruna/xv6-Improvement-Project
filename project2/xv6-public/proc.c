@@ -298,9 +298,18 @@ fork(void)
 void
 exit(void)
 {
+  //! user program에서는 main thread만 exit를 호출함.
+  //TODO 만약 worker thread에서 exit를 호출했다면, kill에 의해 호출된 것.
+  // 하나의 thread가 kill 당하면, 모든 쓰레드를 종료해야함.
+  // 즉, 어떤 thread가 exit당해도, 결국 그 thread가 속해있는 process 자체를 종료해야함.
   struct proc *curproc = myproc();
   struct proc *p;
   int fd;
+
+  // exit를 호출한 thread가 main thread가 아니더라도, 종료하는 것은 main thread(process 자체)이다.
+  // 따라서 종료하는 process를 main thread로 바꿔준다.
+  if(curproc->thread_info.thread_id != 0)
+    curproc = myproc()->thread_info.main_thread;
 
   if(curproc == initproc)
     panic("init exiting");
@@ -738,7 +747,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   cprintf("<스택 할당 전>\nnt->tf->esp: %d\n", (int) nt->tf->esp );
   cprintf("nt->sz: %d, cp->sz: %d\n\n", nt->sz, curproc->sz);
   
-  //TODO
+  //TODO nt의 sz 말고도 process자체의 sz도 변경해줘야 할 듯.
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   uint sz, sp, ustack[3];
@@ -823,11 +832,13 @@ void thread_exit(void *retval)
   panic("zombie exit");
 }
 
+//TODO main thread에서만 호출할 걸로 생각했었는데, 그냥 thread도 호출하는 걸로 바뀌어야함.
 // pid에 해당하는 process의 worker thread들을 전부 종료함.
 // ! ptable.lock을 얻고 호출해야함 !
-void all_thread_exit(struct proc * main_thread)
+void all_thread_exit(struct proc * thread)
 {
-  int pid = main_thread->pid;
+  int pid = thread->pid;
+  struct proc * main_thread = thread->thread_info.main_thread;
   int thread_num = main_thread->thread_info.thread_create_num - main_thread->thread_info.thread_exit_num;
   struct proc *p;
   int fd;
@@ -926,4 +937,58 @@ int thread_join(thread_t thread, void **retval)
   2. fork, exec, sbrk, kill, sleep 잘 작동하는지 확인하기.
 
   0. t_test_3에서 fork로 생성된 자식 process를 wait으로 잘 기다리는지 test
+
+  allocuvm -> setupkvm -> mappages -> panic("remap")
 */
+//TODO check list
+/* 
+•
+fork
+•
+스레드에서 fork 가 호출되면 기존의 fork 루틴을 문제 없이 실행해야 합니다 .
+•
+해당
+스레드의 주소 공간의 내용을 복사하고 새로운 프로세스를 시작할 수 있어야
+합니다
+•
+wait
+시스템 콜로 기다릴 수도 있어야 합니다
+•
+exec
+•
+exec
+가 실행되면 기존 프로세스의 모든 스레드들이 정리되어야 합니다
+•
+하나의
+스레드에서 새로운 프로세스가 시작하고 나머지 스레드는 종료되어야 합니다
+•
+sbrk
+: sbrk 는 프로세스에게 메모리를 할당하는 시스템 콜입니다 .
+•
+여러
+스레드가 동시에 메모리 할당을 요청하더라도 할당해주는 공간이 서로 겹치면 안
+되며 올바르게 할당할 수 있어야 합니다
+•
+sbrk
+에 의해 할당된 메모리는 프로세스 내의 모든 스레드가 공유 가능합니다
+
+•
+kill : kill
+은 Process 를 종료시키는 시스템 콜입니다
+•
+하나
+이상의 스레드가 kill 되면 프로세스 내의 모든 스레드가 종료되어야 합니다
+•
+kill
+및 종료된 스레드의 자원들은 모두 정리되고 회수되어야 합니다
+•
+sleep : sleep
+은 특정 시간만큼 process 를 sleep 시키는 시스템 콜입니다
+•
+한
+스레드가 sleep 을 호출하면 그 스레드만 sleep 해야 합니다 .
+•
+자고
+있는 상태에서도 kill 에 의해서 종료될 수 있어야 합니다
+
+ */
