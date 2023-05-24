@@ -73,6 +73,7 @@ myproc(void) {
 // If found, change state to EMBRYO and initialize
 // state required to run in the kernel.
 // Otherwise return 0.
+// This process is also the main thread.
 static struct proc*
 allocproc(void)
 {
@@ -92,6 +93,7 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   thread_init(p);
+  p->thread_info.main_thread = p;
 
   release(&ptable.lock);
 
@@ -329,6 +331,11 @@ exit(void)
         wakeup1(initproc);
     }
   }
+
+  // # 자식 thread들을 정리해줘야함.
+  // ! exit를 호출하는 건 오로지 process(main thread)뿐.
+  // ! main thread 외에 다른 thread들은 exit가 아닌 thread_exit로 종료됨.
+  all_thread_exit(curproc);
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
@@ -770,10 +777,6 @@ void thread_exit2(void *retval)
 
 void thread_exit(void *retval)
 {
-  // while(1){
-  //   continue;
-  // }
-
   struct proc *curproc = myproc();
   int fd;
   cprintf(" ---------- exit 시작! ---------- retval: %d, *retval: %d\n",(int*)retval, *(int*)retval);
@@ -818,6 +821,52 @@ void thread_exit(void *retval)
   cprintf(" ---------- exit 완료! ---------- \n");
   sched();
   panic("zombie exit");
+}
+
+// pid에 해당하는 process의 worker thread들을 전부 종료함.
+// ! ptable.lock을 얻고 호출해야함 !
+void all_thread_exit(struct proc * main_thread)
+{
+  int pid = main_thread->pid;
+  int thread_num = main_thread->thread_info.thread_create_num - main_thread->thread_info.thread_exit_num;
+  struct proc *p;
+  int fd;
+  if(thread_num == 0){
+    return;
+  }
+  // ! for debug
+  else if(thread_num < 0){
+    panic("thread exit more than create");
+  }
+  // finding worker thread
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->thread_info.thread_id != 0){
+      // Close all open files.
+      for(fd = 0; fd < NOFILE; fd++){
+        if(p->ofile[fd]){
+          fileclose(p->ofile[fd]); //TODO main thread가 사용할 수 있으니 닫으면 안됨?
+          p->ofile[fd] = 0;
+        }
+      }
+
+      release(&ptable.lock);
+      // cwd(현재 작업 디렉토리) 닫기
+      begin_op();
+      iput(p->cwd);
+      end_op();
+      p->cwd = 0;
+
+      acquire(&ptable.lock);
+      p->state = ZOMBIE;
+
+      acquire(&ptable.t_lock);
+      main_thread->thread_info.thread_exit_num++;
+      release(&ptable.t_lock);
+      if(main_thread->thread_info.thread_create_num == main_thread->thread_info.thread_exit_num)
+        break;
+    }
+  }
+  return;  
 }
 
 // Wait for a child thread to exit and return 0.

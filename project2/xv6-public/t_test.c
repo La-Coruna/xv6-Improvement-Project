@@ -48,11 +48,11 @@ int main(int argc, char *argv[])
   //printf(1, "<after call> thread: %d, sr: %d, arg: %d\n", thread, worker, &i);
   //printf(1,"res: %d\n",res);
   //@@
-  int* retval;
-  printf(1, "[thread join 시작]\n");
-  thread_join(thread, (void *) &retval);
-  printf(1,"thread에 의해 retval: %d\n\n", *retval);
-  printf(1, "[thread join 완료 직후]\n");
+  // int* retval;
+  // printf(1, "[thread join 시작]\n");
+  // thread_join(thread, (void *) &retval);
+  // printf(1,"thread에 의해 retval: %d\n\n", *retval);
+  // printf(1, "[thread join 완료 직후]\n");
   //@@
   procdump(); //@
   // for(int a = 0; a < 9999999; a++)
