@@ -986,10 +986,8 @@ int thread_join(thread_t thread, void **retval)
 
 //TODO 2023-05-24
 /* 
-  1. pmanager state도 나오게 하기. procdump참조
-  2. fork, exec, sbrk, kill, sleep 잘 작동하는지 확인하기.
+  1. 명세랑 비교하면서 맞춰보면서 제대로 작동하나 맞춰보기
+  2. 자체 테스트 만들어보기.
 
-  0. t_test_3에서 fork로 생성된 자식 process를 wait으로 잘 기다리는지 test
-
-  allocuvm -> setupkvm -> mappages -> panic("remap")
+  0. 코드 리팩토링
 */
