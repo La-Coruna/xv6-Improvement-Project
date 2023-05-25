@@ -20,7 +20,7 @@ exec(char *path, char **argv)
   struct proc *curproc = myproc();
   //struct proc *main_thread = myproc()->thread_info.main_thread; //@ main thread에서 exec 되게.
 
-cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->thread_info.thread_id);
+//cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->thread_info.thread_id);
 
 
 
@@ -96,11 +96,7 @@ cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->t
       last = s+1;
   safestrcpy(curproc->name, last, sizeof(curproc->name));
 
-// //TODO
   // # 자식 쓰레드 종료
- 
-  cprintf("curproc->kstac:%d\n",curproc->kstack);
-  //all_thread_exit1(main_thread);
   all_thread_exit(curproc);
 
 
@@ -113,25 +109,15 @@ cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->t
   // cprintf("<exec> sz: %d\n",sz); // ! for debug
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
-//@@
+  // # thread_info 설정.
   curproc->thread_info.thread_id = 0;
   curproc->thread_info.thread_create_num = 0;
   curproc->thread_info.thread_exit_num = 0;
   curproc->thread_info.retval = 0;
   curproc->thread_info.main_thread = curproc;
-//@@
-//  cprintf("curproc->thread_info: %d\n",curproc->thread_info.thread_exit_num);
-//cprintf("here1\n");
-  //thread_init(curproc);//@@
 
   switchuvm(curproc);
   freevm(oldpgdir);
-cprintf("here2\n");
-
-procdump();
-//while(curproc->pid==3)
-  ;
-
   return 0;
 
  bad:
