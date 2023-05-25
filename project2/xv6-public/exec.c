@@ -18,8 +18,9 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  //struct proc *main_thread = myproc()->thread_info.main_thread; //@ main thread에서 exec 되게.
 
-
+cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->thread_info.thread_id);
 
 
 
@@ -32,8 +33,7 @@ exec(char *path, char **argv)
   }
   ilock(ip);
   pgdir = 0;
-
-  cprintf("<exec> path: %s | argv: %s\n",path, *argv); // ! for debug
+  // cprintf("<exec> path: %s | argv: %s\n",path, *argv); // ! for debug
   
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
@@ -43,7 +43,6 @@ exec(char *path, char **argv)
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
-
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
@@ -65,7 +64,6 @@ exec(char *path, char **argv)
   iunlockput(ip);
   end_op();
   ip = 0;
-
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
@@ -73,7 +71,6 @@ exec(char *path, char **argv)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
-
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
@@ -99,17 +96,42 @@ exec(char *path, char **argv)
       last = s+1;
   safestrcpy(curproc->name, last, sizeof(curproc->name));
 
+// //TODO
+  // # 자식 쓰레드 종료
+ 
+  cprintf("curproc->kstac:%d\n",curproc->kstack);
+  //all_thread_exit1(main_thread);
+  all_thread_exit1(curproc);
+
+
   // Commit to the user image.
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
   curproc->sz_limit = 0;
   curproc->stacknum = 1;
-  cprintf("<exec> sz: %d\n",sz); // ! for debug
+  // cprintf("<exec> sz: %d\n",sz); // ! for debug
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+//@@
+  curproc->thread_info.thread_id = 0;
+  curproc->thread_info.thread_create_num = 0;
+  curproc->thread_info.thread_exit_num = 0;
+  curproc->thread_info.retval = 0;
+  curproc->thread_info.main_thread = curproc;
+//@@
+//  cprintf("curproc->thread_info: %d\n",curproc->thread_info.thread_exit_num);
+//cprintf("here1\n");
+  //thread_init(curproc);//@@
+
   switchuvm(curproc);
   freevm(oldpgdir);
+cprintf("here2\n");
+
+procdump();
+//while(curproc->pid==3)
+  ;
+
   return 0;
 
  bad:

@@ -131,6 +131,7 @@ void            thread_update_proc_info();
 int             thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg);
 void            thread_exit(void *retval);
 void            all_thread_exit(struct proc * main_thread);
+void            all_thread_exit1(struct proc * main_thread);
 int             thread_join(thread_t thread, void **retval);
 
 // swtch.S
