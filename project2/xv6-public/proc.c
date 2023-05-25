@@ -356,9 +356,9 @@ exit(void)
   // # 자식 thread들을 정리해줘야함.
   // ! exit를 호출하는 건 오로지 process(main thread)뿐.
   // ! main thread 외에 다른 thread들은 exit가 아닌 thread_exit로 종료됨.
-  cprintf("\n\nall thread exit 시작\n");
+  //cprintf("\n\nall thread exit 시작\n");
   all_thread_exit(curproc);
-  cprintf("\n\nall thread exit 완료\n\n");
+  //cprintf("\n\nall thread exit 완료\n\n");
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
@@ -750,7 +750,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
     return -1;
   }
   
-  cprintf("-------------\npid:%d인 thread[%d]가 만들어지기 시작합니다.(thread[%d]에 의해)\n",nt->pid,nt->thread_info.thread_id,myproc()->thread_info.thread_id);
+  //cprintf("-------------\npid:%d인 thread[%d]가 만들어지기 시작합니다.(thread[%d]에 의해)\n",nt->pid,nt->thread_info.thread_id,myproc()->thread_info.thread_id);
   acquire(&ptable.t_lock);
   // Copy necessary information from current process.
   nt->pgdir = main_thread->pgdir;
@@ -887,7 +887,7 @@ all_thread_exit(struct proc * thread)
 
   // finding worker thread
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid && p->thread_info.thread_id != 0){
+    if(p->pid == pid && p->thread_info.thread_id != thread->thread_info.thread_id){
       // cprintf("------ all_thread_exit[pid: %d]  -------\nthread[%d]발견! 종료 시작.\n",main_thread->pid,p->thread_info.thread_id);
       // Close all open files.
       for(fd = 0; fd < NOFILE; fd++){
@@ -919,6 +919,7 @@ all_thread_exit(struct proc * thread)
       p->parent = 0;
       p->name[0] = 0;
       p->killed = 0;
+      thread_init(p); // @@ 새로 추가해줌.
       p->state = UNUSED;
       //@@@
       main_thread->thread_info.thread_exit_num++;
@@ -929,69 +930,6 @@ all_thread_exit(struct proc * thread)
   }
   if(!is_locked)
     release(&ptable.lock);
-  return;  
-}
-
-void
-all_thread_exit1(struct proc * thread)
-{
-  int pid = thread->pid;
-  struct proc * main_thread = thread->thread_info.main_thread;
-  int thread_num = main_thread->thread_info.thread_create_num - main_thread->thread_info.thread_exit_num;
-  struct proc *p;
-  int fd;
-  if(thread_num == 0){
-    return;
-  }
-  // ! for debug
-  else if(thread_num < 0){
-    panic("thread exit more than create");
-  }
-  cprintf("&& thread->thread_info.thread_id: %d\n",thread->thread_info.thread_id);
-
-  // finding worker thread
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-  //int a = (p->thread_info.thread_id != 1); // ! for debug
-  int a = (p->thread_info.thread_id != thread->thread_info.thread_id);
-    if(p->pid == pid && a){
-      // cprintf("------ all_thread_exit[pid: %d]  -------\nthread[%d]발견! 종료 시작.\n",main_thread->pid,p->thread_info.thread_id);
-      // Close all open files.
-      for(fd = 0; fd < NOFILE; fd++){
-        if(p->ofile[fd]){
-          fileclose(p->ofile[fd]); //TODO main thread가 사용할 수 있으니 닫으면 안됨?
-          p->ofile[fd] = 0;
-        }
-      }
-
-      // cwd(현재 작업 디렉토리) 닫기
-      begin_op();
-      iput(p->cwd);
-      end_op();
-      p->cwd = 0;
-
-      acquire(&ptable.lock);
-      p->state = ZOMBIE;
-      release(&ptable.lock);
-
-      acquire(&ptable.t_lock);
-      //@@@
-      // 가상 메모리 free
-      //kfree(p->kstack); //@ kstack도 공유해서 프로세스꺼 가져와서 쓰고 있어서 반환하면 안됨!
-      p->kstack = 0;
-      // freevm(p->pgdir); //@ pgdir은 프로세스꺼 가져와서 쓰고 있어서 반환하면 안됨!
-      p->pid = 0;
-      p->parent = 0;
-      p->name[0] = 0;
-      p->killed = 0;
-      thread_init(p); // @@ 새로 추가해줌.
-      p->state = UNUSED;
-      //@@@
-      main_thread->thread_info.thread_exit_num++;
-      release(&ptable.t_lock);
-      if(main_thread->thread_info.thread_create_num == main_thread->thread_info.thread_exit_num)
-        break;
-    }
-  }
   return;  
 }
 

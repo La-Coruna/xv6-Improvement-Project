@@ -101,7 +101,7 @@ cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->t
  
   cprintf("curproc->kstac:%d\n",curproc->kstack);
   //all_thread_exit1(main_thread);
-  all_thread_exit1(curproc);
+  all_thread_exit(curproc);
 
 
   // Commit to the user image.
