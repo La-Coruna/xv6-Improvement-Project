@@ -162,12 +162,14 @@ int t_test_2()
 
 int t_test_3()
 {
-  thread_t thread[2];
+  thread_t thread[5];
   int arg = 0;
 
   printf(1, "[thread 여러개 생성 test]\n");
-  for(int i = 0; i < 2 ; i++)
+  for(int i = 0; i < 5 ; i++){
     thread_create(&thread[i],worker3,&arg);
+    proclist();
+  }
   printf(1, "[thread create 직후]\n");
   procdump(); //@
 
@@ -181,7 +183,7 @@ int t_test_3()
   //@@
   int* retval;
   printf(1, "[thread join 시작]\n");
-  for(int i = 0; i < 2 ; i++)
+  for(int i = 0; i < 5 ; i++)
     thread_join(thread[i], (void *) &retval);
   printf(1,"thread에 의해 retval: %d\n\n", *retval);
   printf(1, "[thread join 완료 직후]\n");
