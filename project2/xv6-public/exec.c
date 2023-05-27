@@ -18,9 +18,7 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
-  //struct proc *main_thread = myproc()->thread_info.main_thread; //@ main thread에서 exec 되게.
 
-//cprintf("exec를 한 쓰레드는[pid: %d, tid: %d]\n",myproc()->pid,myproc()->thread_info.thread_id);
 
 
 
@@ -33,7 +31,6 @@ exec(char *path, char **argv)
   }
   ilock(ip);
   pgdir = 0;
-  // cprintf("<exec> path: %s | argv: %s\n",path, *argv); // ! for debug
   
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
@@ -54,7 +51,7 @@ exec(char *path, char **argv)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)  //@ allocuvm point
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -67,7 +64,7 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)  //@ allocuvm point
+  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
@@ -96,8 +93,8 @@ exec(char *path, char **argv)
       last = s+1;
   safestrcpy(curproc->name, last, sizeof(curproc->name));
 
-  // # 자식 쓰레드 종료
-  all_thread_exit(curproc);
+  // # exec호출한 thread외에 다른 thread 종료
+  all_thread_exit_except_exec_thread(curproc);
 
 
   // Commit to the user image.
@@ -106,7 +103,6 @@ exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->sz_limit = 0;
   curproc->stacknum = 1;
-  // cprintf("<exec> sz: %d\n",sz); // ! for debug
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   // # thread_info 설정.
