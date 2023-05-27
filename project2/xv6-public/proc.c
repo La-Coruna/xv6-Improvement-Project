@@ -352,15 +352,15 @@ exit(void)
         wakeup1(initproc);
     }
   }
+  release(&ptable.lock);
 
   // # 자식 thread들을 정리해줘야함.
   // ! exit를 호출하는 건 오로지 process(main thread)뿐.
   // ! main thread 외에 다른 thread들은 exit가 아닌 thread_exit로 종료됨.
-  //cprintf("\n\nall thread exit 시작\n");
   all_thread_exit(curproc);
-  //cprintf("\n\nall thread exit 완료\n\n");
 
   // Jump into the scheduler, never to return.
+  acquire(&ptable.lock);
   curproc->state = ZOMBIE;
   sched();
   panic("zombie exit");
@@ -473,6 +473,9 @@ sched(void)
   int intena;
   struct proc *p = myproc();
 
+  /* for debug */
+  // if(holding(&ptable.t_lock))
+  //   panic("ptable.t_lock should not be locked now.");
   if(!holding(&ptable.lock))
     panic("sched ptable.lock");
   if(mycpu()->ncli != 1)
@@ -879,28 +882,20 @@ all_thread_exit(struct proc * thread)
     panic("thread exit more than create");
   }
 
-  // exit 내부에서 호출 시, ptable.lock을 이미 얻고 들어와서 새로 lock을 안 걸어도 됨.
-  // exec 내부에서 호출 시, ptable.lock을 얻어야함.
-  int is_locked = holding(&ptable.lock);
-  if(!is_locked)
-    acquire(&ptable.lock);
+  acquire(&ptable.lock);
 
   // finding worker thread
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid && p->thread_info.thread_id != thread->thread_info.thread_id){
-      // cprintf("------ all_thread_exit[pid: %d]  -------\nthread[%d]발견! 종료 시작.\n",main_thread->pid,p->thread_info.thread_id);
+      // cprintf("------ all thread exit[pid: %d]  -------\nthread[%d]발견! 종료 시작.\n",main_thread->pid,p->thread_info.thread_id);
       // Close all open files.
+      release(&ptable.lock); // # iput과 fileclose에서 ptable.lock을 씀.
       for(fd = 0; fd < NOFILE; fd++){
         if(p->ofile[fd]){
           fileclose(p->ofile[fd]); //TODO main thread가 사용할 수 있으니 닫으면 안됨?
           p->ofile[fd] = 0;
         }
       }
-      // cprintf("@@ release 들어갑니다잉 @%d@\n",p->thread_info.thread_id);
-
-      release(&ptable.lock); // # iput에서 ptable.lock을 쓸 걸?
-      // cprintf("@@ release 나옵니다잉   @%d@\n",p->thread_info.thread_id);
-      // cwd(현재 작업 디렉토리) 닫기
       begin_op();
       iput(p->cwd);
       end_op();
@@ -928,8 +923,7 @@ all_thread_exit(struct proc * thread)
         break;
     }
   }
-  if(!is_locked)
-    release(&ptable.lock);
+  release(&ptable.lock);
   return;  
 }
 
