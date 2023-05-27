@@ -111,8 +111,7 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   // # thread_info 설정.
   curproc->thread_info.thread_id = 0;
-  curproc->thread_info.thread_create_num = 0;
-  curproc->thread_info.thread_exit_num = 0;
+  curproc->thread_info.thread_num = 0;
   curproc->thread_info.retval = 0;
   curproc->thread_info.main_thread = curproc;
 

@@ -36,8 +36,7 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct thread_info_t {
   thread_t thread_id;
-  uint thread_create_num;
-  uint thread_exit_num;
+  uint thread_num;
   void* retval;
   struct proc *main_thread;
 };

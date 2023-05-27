@@ -9,14 +9,14 @@
 
 struct {
   struct spinlock lock;
-  struct spinlock t_lock;  //! 임시 디자인
+  struct spinlock t_lock;
   struct proc proc[NPROC];
 } ptable;
 
 static struct proc *initproc;
 
 int nextpid = 1;
-int nexttid = 1;           //! 임시 디자인
+int nexttid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -26,7 +26,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-  initlock(&ptable.t_lock, "ptable_thread");   //! 임시 디자인
+  initlock(&ptable.t_lock, "ptable_thread");
 }
 
 // Must be called with interrupts disabled
@@ -651,7 +651,7 @@ proclist(void)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING){
+    if((p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING) && (p->thread_info.thread_id==0)){
       cprintf("%s %d %d %d %d\n", p->name, p->pid, p->stacknum, p->sz, p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
     }
   }  
@@ -709,8 +709,7 @@ void
 thread_init(struct proc *p){
   //cprintf("thread_init 시작: %d, %d\n",p->pid,p->thread_info.thread_id);
   p->thread_info.thread_id = 0;
-  p->thread_info.thread_create_num = 0;
-  p->thread_info.thread_exit_num = 0;
+  p->thread_info.thread_num = 0;
   p->thread_info.retval = 0;
   p->thread_info.main_thread = 0;
   //cprintf("thread_init 끝: %d, %d\n",p->pid,p->thread_info.thread_id);
@@ -808,7 +807,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   release(&ptable.lock);
 
   *thread = nt->thread_info.thread_id;
-  main_thread->thread_info.thread_create_num++;
+  main_thread->thread_info.thread_num++;
 
   return 0;
 }
@@ -855,7 +854,7 @@ void thread_exit(void *retval)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  curproc->thread_info.main_thread->thread_info.thread_exit_num++;
+  curproc->thread_info.main_thread->thread_info.thread_num--;
   // cprintf(" ---------- exit 완료! ---------- \n");
   sched();
   panic("zombie exit");
@@ -871,7 +870,7 @@ all_thread_exit(struct proc * thread)
 {
   int pid = thread->pid;
   struct proc * main_thread = thread->thread_info.main_thread;
-  int thread_num = main_thread->thread_info.thread_create_num - main_thread->thread_info.thread_exit_num;
+  int thread_num = main_thread->thread_info.thread_num;
   struct proc *p;
   int fd;
   if(thread_num == 0){
@@ -917,9 +916,9 @@ all_thread_exit(struct proc * thread)
       thread_init(p); // @@ 새로 추가해줌.
       p->state = UNUSED;
       //@@@
-      main_thread->thread_info.thread_exit_num++;
+      main_thread->thread_info.thread_num--;
       release(&ptable.t_lock);
-      if(main_thread->thread_info.thread_create_num == main_thread->thread_info.thread_exit_num)
+      if(main_thread->thread_info.thread_num == 0)
         break;
     }
   }
@@ -978,10 +977,7 @@ int thread_join(thread_t thread, void **retval)
   }
 }
 
-//TODO 2023-05-24
+//TODO 2023-05-27
 /* 
-  1. 명세랑 비교하면서 맞춰보면서 제대로 작동하나 맞춰보기
-  2. 자체 테스트 만들어보기.
-
   0. 코드 리팩토링
 */
