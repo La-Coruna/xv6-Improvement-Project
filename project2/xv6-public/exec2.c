@@ -125,5 +125,6 @@ exec2(char *path, char **argv, int stacksize)
     iunlockput(ip);
     end_op();
   }
+  cprintf("exec2: fail\n");
   return -1;
 }
