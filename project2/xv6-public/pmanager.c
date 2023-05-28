@@ -274,8 +274,11 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     argv = &path;
     stacksize = atoi(cmd2->arg2);
 
-    if(fork() == 0)
+    if(fork() == 0){
       exec2(path,argv,stacksize);
+      // If exec2 failed, then the forked process exit.
+      exit();
+    }
 
     break;
 
@@ -304,8 +307,11 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     path = (char *) cmd1->arg;
     argv = &path;
 
-    if(fork() == 0)
+    if(fork() == 0){
       exec(path,argv);
+      // If exec1 failed, then the forked process exit.
+      exit();
+    }
 
     break;
 
