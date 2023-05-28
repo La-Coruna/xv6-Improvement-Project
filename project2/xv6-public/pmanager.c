@@ -41,6 +41,9 @@ struct cmdarg2 {
 // function declaration
 void skipWhitespace(char ** ss, char * es);
 char* getWord(char ** ss, char * es);
+struct pmgrcmd* alloc_cmdarg0(int type);
+struct pmgrcmd* alloc_cmdarg1(int type, const char *arg);
+struct pmgrcmd* alloc_cmdarg2(int type, const char *arg1, const char *arg2);
 int getPmgrCmd(char *buf, int nbuf);
 struct pmgrcmd* parsecmd(char *s);
 void runPmgrCmd(struct pmgrcmd *cmd);
@@ -296,7 +299,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     }
     else if(setmemorylimit(pid,limit) == 0)
       printf(1,"set memory limit succeed.\n");
-      
+
     free(cmd2);
     break;
 
