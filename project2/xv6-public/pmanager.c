@@ -13,7 +13,7 @@
 #define MEMLIM  4
 #define EXIT  5
 #define EXEC1  6 // ! for debug
-#define ASDF  99 // ! for debug
+#define SBRK  7 // ! for debug
 
 #define MAXARGLENGTH 51
 
@@ -207,8 +207,8 @@ parsecmd(char *s)
 
   // ! for debug
   // debug command
-  else if (strcmp(commandName,"asdf")==0){
-    pmgrcmd = alloc_cmdarg0(ASDF);
+  else if (strcmp(commandName,"sbrk")==0){
+    pmgrcmd = alloc_cmdarg0(SBRK);
   }
 
   // wrong command
@@ -234,8 +234,6 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   char ** argv;
   int stacksize;
   
-  printf(1,"type: %d\n",pmgrcmd->type);
-
   switch(pmgrcmd->type){
   default:
     break;
@@ -251,9 +249,6 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     break;
 
   case LIST:
-    printf(1,"list\n");
-    //cmd0 = (struct cmdarg0 *) pmgrcmd;
-    //printf(1,"%d\n",cmd0->type);
     proclist();
     break;
 
@@ -271,8 +266,6 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   case EXEC:
     cmd2 = (struct cmdarg2 *) pmgrcmd;
 
-    printf(1,"exec type: %d, arg1: %s, arg2: %s\n",cmd2->type,cmd2->arg1,cmd2->arg2);
-
     path = (char *) cmd2->arg1;
     argv = &path;
     stacksize = atoi(cmd2->arg2);
@@ -284,15 +277,15 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
 
   case MEMLIM:
     cmd2 = (struct cmdarg2 *) pmgrcmd;
-    printf(1,"memlim type: %d, arg1: %s, arg2: %s\n",cmd2->type,cmd2->arg1,cmd2->arg2);
     pid = atoi(cmd2->arg1);
     limit = atoi(cmd2->arg2);
 
-    setmemorylimit(pid,limit);
+    if(setmemorylimit(pid,limit) == 0)
+      printf(1,"set memory limit succeed.\n");
     break;
 
   case EXIT:
-    printf(1,"exit\n");
+    printf(1,"pmanager exit\n");
       exit();
     break;
 
@@ -300,7 +293,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   case EXEC1:
     cmd1 = (struct cmdarg1 *) pmgrcmd;
 
-    printf(1,"exec1 type: %d, arg: %s\n",cmd1->type,cmd1->arg);
+    printf(1,"[debug command] exec1: %s\n",cmd1->arg);
 
     path = (char *) cmd1->arg;
     argv = &path;
@@ -311,17 +304,12 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     break;
 
   // ! for debug
-  case ASDF:
-    printf(1,"debug command\n");
+  case SBRK:
+    printf(1,"[debug command] sbrk(500) with current process.\n");
 
     sbrk(500);
     break;
 
-  // case BACK:
-    // bcmd = (struct backcmd*)cmd;
-    // if(fork1() == 0)
-    //   runcmd(bcmd->cmd);
-    // break;
   }
   return;
 }
