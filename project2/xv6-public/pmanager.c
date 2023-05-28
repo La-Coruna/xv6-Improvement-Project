@@ -242,15 +242,18 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   // 명세 외의 command를 입력했을 때 예외처리
   case WRONGCMD:
     printf(1,"wrong command.\n");
+    free(pmgrcmd);
     break;
 
   // 인자를 잘못 입력했을 때 예외처리
   case WRONGARG:
     printf(1,"wrong argument.\n");
+    free(pmgrcmd);
     break;
 
   case LIST:
     proclist();
+    free(pmgrcmd);
     break;
 
   case KILL:
@@ -265,6 +268,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     else{
       printf(1,"killing process whose pid is %d successed.\n",pid);
     }
+    free(cmd1);
     break;
 
   case EXEC:
@@ -280,6 +284,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
       exit();
     }
 
+    free(cmd2);
     break;
 
   case MEMLIM:
@@ -291,11 +296,14 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     }
     else if(setmemorylimit(pid,limit) == 0)
       printf(1,"set memory limit succeed.\n");
+      
+    free(cmd2);
     break;
 
   case EXIT:
     printf(1,"pmanager exit\n");
-      exit();
+    free(pmgrcmd);
+    exit();
     break;
 
   // ! for debug
@@ -312,7 +320,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
       // If exec1 failed, then the forked process exit.
       exit();
     }
-
+    free(cmd1);
     break;
 
   // ! for debug
@@ -320,6 +328,7 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     printf(1,"[debug command] sbrk(500) with current process.\n");
 
     sbrk(500);
+    free(pmgrcmd);
     break;
 
   }
