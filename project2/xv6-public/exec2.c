@@ -33,8 +33,6 @@ exec2(char *path, char **argv, int stacksize)
   ilock(ip);
   pgdir = 0;
 
-  cprintf("<exec2> path: %s | argv: %s\n",path, *argv); // ! for debug
-
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
     goto bad;
@@ -55,7 +53,7 @@ exec2(char *path, char **argv, int stacksize)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0) //@ allocuvm point
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0) 
       goto bad;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -69,7 +67,7 @@ exec2(char *path, char **argv, int stacksize)
 
   // stacksize만큼의 스택용 페이지와 하나의 가드용 페이지를 할당한다.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0) //@ allocuvm point
+  if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0) 
     goto bad;
   clearpteu(pgdir, (char*)(sz - (stacksize+1)*PGSIZE));
   sp = sz;
@@ -99,15 +97,23 @@ exec2(char *path, char **argv, int stacksize)
       last = s+1;
   safestrcpy(curproc->name, last, sizeof(curproc->name));
 
+  // # exec호출한 thread외에 다른 thread 종료
+  all_thread_exit_except_exec_thread(curproc);
+
   // Commit to the user image.
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
   curproc->sz_limit = 0;
   curproc->stacknum = stacksize;
-  cprintf("<exec2> sz: %d\n",sz); // ! for debug
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+  // # thread_info 설정.
+  curproc->thread_info.thread_id = 0;
+  curproc->thread_info.thread_num = 0;
+  curproc->thread_info.retval = 0;
+  curproc->thread_info.main_thread = curproc;
+
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
