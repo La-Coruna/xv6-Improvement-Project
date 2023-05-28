@@ -124,7 +124,7 @@ found:
 
 // allocproc과 유사하게 thread로 사용할 proc할당.
 static struct proc*
-allocthread(struct proc* calling_thread)
+allocthread(struct proc* main_thread)
 {
   struct proc *p;
   char *sp;
@@ -140,7 +140,7 @@ allocthread(struct proc* calling_thread)
 
 found:
   p->state = EMBRYO;
-  p->pid = calling_thread->pid;
+  p->pid = main_thread->pid;
   thread_init(p);
 
   release(&ptable.lock);
@@ -148,7 +148,7 @@ found:
   // thread_id 배정. main_thread 연결
   acquire(&ptable.t_lock);
   p->thread_info.thread_id=nexttid++;
-  p->thread_info.main_thread= (calling_thread->thread_info.thread_id==0) ? calling_thread : calling_thread->thread_info.main_thread;
+  p->thread_info.main_thread= main_thread;
   release(&ptable.t_lock);
 
   // Allocate kernel stack.
@@ -305,19 +305,14 @@ fork(void)
 void
 exit(void)
 {
-  //! user program에서는 main thread만 exit를 호출함.
-  //TODO 만약 worker thread에서 exit를 호출했다면, kill에 의해 호출된 것.
-  // 하나의 thread가 kill 당하면, 모든 쓰레드를 종료해야함.
-  // 즉, 어떤 thread가 exit당해도, 결국 그 thread가 속해있는 process 자체를 종료해야함.
+  // exit가 호출되는 경우, 어떤 thread에서 호출되었는지 상관없이 모든 thread 종료.
+  // 또한 하나의 thread가 kill 당하면, 모든 thread를 종료해야 하는 것도 일맥상통.
+
+  // exit를 호출한 thread가 main thread가 아니더라도, 종료하는 것은 결국 main thread(process 자체)이다.
+  // 따라서 종료하는 process를 main thread로 바꿔준다.
   struct proc *curproc = myproc()->thread_info.main_thread;
-  // struct proc *curproc = myproc();
   struct proc *p;
   int fd;
-
-  // exit를 호출한 thread가 main thread가 아니더라도, 종료하는 것은 main thread(process 자체)이다.
-  // 따라서 종료하는 process를 main thread로 바꿔준다.
-  if(curproc->thread_info.thread_id != 0)
-    curproc = myproc()->thread_info.main_thread;
 
   if(curproc == initproc)
     panic("init exiting");
@@ -339,12 +334,11 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
-//TODO 완료 다른 thread를 부모로 가지고 있는 녀석들.... 해줘야겠지...
   // Pass abandoned children to init.
+  // child thread를 부모로 가지고 있는 녀석들은 all_child_thread_zombie에서 처리해줌.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
       p->parent = initproc;
-      thread_update_proc_info(p); //@ p의 모든 thread가 parent기 바뀌도록 업데이트.
       if(p->state == ZOMBIE)
         wakeup1(initproc);
     }
@@ -543,7 +537,6 @@ sleep(void *chan, struct spinlock *lk)
   // so it's okay to release lk.
   if(lk != &ptable.lock){  //DOC: sleeplock0
     acquire(&ptable.lock);  //DOC: sleeplock1
-    //acquire13(&ptable.lock,"sleep");
     release(lk);
   }
   // Go to sleep.
@@ -647,20 +640,20 @@ procdump(void)
 void
 proclist(void)
 {
+  struct proc *p;
   acquire(&ptable.lock);
   cprintf("----------------- process list -----------------\n");
 
-  struct proc *p;
-
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if((p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING) && (p->thread_info.thread_id==0)){
-      cprintf("%s %d %d %d %d\n", p->name, p->pid, p->stacknum, p->sz, p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
+      cprintf("%s %d %d %d %d\n", p->name, p->pid, p->stacknum, p->sz, p->sz_limit);
+      //프로세스의 이름, pid, 스택용 페이지의 개수, (모든 thread를 고려한) 할당받은 메모리의 크기, 메모리의 최대 제한
     }
   }  
 
-
   cprintf("------------------------------------------------\n");
   release(&ptable.lock);
+  return;
 }
 
 // If ok, then return 1.
@@ -697,16 +690,13 @@ setmemorylimit(int pid, int limit)
     release(&ptable.lock);
     return -1;
   }
-  target_p->sz_limit = u_limit;
-  //cprintf("%s %d %d\n", target_p->name, target_p->pid, target_p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
-  
-  //cprintf("set memory limit. pid: %d, limit: %d\n",pid,u_limit);
+  target_p->sz_limit = u_limit;  
+  // 변경된 sz_limit을 child thread들에게도 update시켜줌.
+  thread_update_proc_info(target_p);
 
   release(&ptable.lock);
   return 0;
 }
-
-//TODO
 
 void
 thread_init(struct proc *p){
@@ -724,23 +714,17 @@ thread_update_proc_info(struct proc * curproc)
   int pid = curproc->pid;
   thread_t tid = curproc->thread_info.thread_id;
   struct proc * t;
-  // cprintf("[pid: %d 인 thread의 정보를 update 하겠습니다.]\n",pid);
   for(t = ptable.proc; t < &ptable.proc[NPROC]; t++){
     if(t->pid == pid && t->thread_info.thread_id != tid){
-      // cprintf("tid:%d 인 thread의 정보를 update 했습니다.\n",t->thread_info.thread_id);
-      //t->pgdir = curproc->pgdir;
       t->sz = curproc->sz;
       t->sz_limit = curproc->sz_limit;
       t->parent = curproc->parent;
     }
   }
-  // cprintf("[pid: %d 인 thread의 정보를 update 완료했습니다.]\n",pid);
   return;
 }
 
-// Create a new thread copying current process as the parent.
-// Sets up stack to return as if from system call.
-// Caller must set state of returned thread to RUNNABLE.
+// Create a new thread copying current process as the main thread.
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
@@ -749,7 +733,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   struct proc *main_thread = myproc()->thread_info.main_thread;
 
   // Allocate process.
-  if((nt = allocthread(main_thread)) == 0){ //TODO 인자를 mainthread로 바꿔주기.
+  if((nt = allocthread(main_thread)) == 0){
     return -1;
   }
   
@@ -759,11 +743,12 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   nt->sz_limit = main_thread->sz_limit;
   nt->stacknum = main_thread->stacknum;
   nt->parent = main_thread->parent;
-
   *nt->tf = *main_thread->tf;
   nt->tf->eax = 0;
 
-  nt->tf->eip = (uint)start_routine; //# 이동이 된다!
+  // trapframe의 eip를 start_routine으로 설정하여,
+  // 생성된 thread의 시작 지점을 start_routine으로 설정한다.
+  nt->tf->eip = (uint)start_routine;
 
   for(i = 0; i < NOFILE; i++)
     if(main_thread->ofile[i])
@@ -772,22 +757,21 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 
   safestrcpy(nt->name, main_thread->name, sizeof(main_thread->name));
 
-  //TODO nt의 sz 말고도 process자체의 sz도 변경해줘야 할 듯.
+  
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
-  // cprintf("thread[pid:%d,tid:%d]의 stack 할당. 시키는 thread는 [pid:%d,tid:%d]\n",nt->pid, nt->thread_info.thread_id,main_thread->pid, main_thread->thread_info.thread_id);
   uint sz, sp, ustack[3];
   sz = PGROUNDUP(nt->sz);
   if((sz = allocuvm(nt->pgdir, sz, sz + 2*PGSIZE)) == 0)  
     cprintf("error: stack 할당\n");
-  clearpteu(nt->pgdir, (char*)(sz - 2*PGSIZE)); //# 가드페이지 생성
+  clearpteu(nt->pgdir, (char*)(sz - 2*PGSIZE)); // 가드페이지 생성
   sp = sz;
   nt->sz = sz;
   main_thread->sz = sz;
-  thread_update_proc_info(nt); // TODO mainthread 기준으로 하게 만들었는데, 굳이 이거 해줘야할까? 안하면 sbrk test 못통과하네.
+  thread_update_proc_info(nt);
 
   ustack[0] = 0xffffffff;  // fake return PC
-  ustack[1] = (uint) arg;
+  ustack[1] = (uint) arg;  // 인자 전달
 
   sp -= (2) * 4;
   if(copyout(nt->pgdir, sp, ustack, 8) < 0)
@@ -836,13 +820,12 @@ thread_exit(void *retval)
   // # join에서 받을 반환값 설정
   curproc->thread_info.retval = retval;
 
-//TODO
   // thread가 fork를 통해 child를 갖고 있었다면
-  // Pass abandoned children to main thread. (main_thread가 살아있기 때문에 init대신 main_thread로 넘겨줌.)
+  // Pass abandoned children to main thread.
+  // (main_thread가 살아있기 때문에 init대신 main_thread로 넘겨줌.)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
       p->parent = curproc->thread_info.main_thread;
-      thread_update_proc_info(p); 
       if(p->state == ZOMBIE)
         wakeup1(curproc->thread_info.main_thread);
     }
@@ -851,7 +834,6 @@ thread_exit(void *retval)
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   curproc->thread_info.main_thread->thread_info.thread_num--;
-  // cprintf(" ---------- exit 완료! ---------- \n");
   sched();
   panic("zombie exit");
 }
@@ -886,7 +868,7 @@ all_thread_exit_except_exec_thread(struct proc * thread)
     if(p->pid == curproc_pid && p->thread_info.thread_id != curproc_tid){
       
       // Close all open files.
-      release(&ptable.lock); // # iput과 fileclose에서 ptable.lock을 씀.
+      release(&ptable.lock); //iput과 fileclose에서 ptable.lock을 씀.
       for(fd = 0; fd < NOFILE; fd++){
         if(p->ofile[fd]){
           fileclose(p->ofile[fd]);
@@ -905,27 +887,21 @@ all_thread_exit_except_exec_thread(struct proc * thread)
       for(c = ptable.proc; c < &ptable.proc[NPROC]; c++){
         if(c->parent == p){
           c->parent = initproc;
-          thread_update_proc_info(c); 
           if(c->state == ZOMBIE)
             wakeup1(initproc);
         }
       }
 
-      //p->state = ZOMBIE;
-
       acquire(&ptable.t_lock);
-      //cprintf("p[%d의 %d]->kstack: %d\n",p->pid,p->thread_info.thread_id,p->kstack);
       kfree(p->kstack); //@
-      //cprintf("kfree완료\n",p->pid,p->thread_info.thread_id,p->kstack);
       p->kstack = 0;
-      // freevm(p->pgdir); //@ pgdir은 exec에서 free해줄거임
+      //pgdir은 exec에서 free해줄거기 때문에 따로 free 안해준다.
       p->pid = 0;
       p->parent = 0;
       p->name[0] = 0;
       p->killed = 0;
-      thread_init(p); // @@ 새로 추가해줌.
+      thread_init(p);
       p->state = UNUSED;
-      //@@@
       main_thread->thread_info.thread_num--;
       release(&ptable.t_lock);
 
@@ -982,8 +958,7 @@ all_child_thread_zombie(struct proc * main_thread)
       // Pass abandoned children to init.
       for(c = ptable.proc; c < &ptable.proc[NPROC]; c++){
         if(c->parent == p){
-          c->parent = initproc;
-          thread_update_proc_info(c); 
+          c->parent = initproc; 
           if(c->state == ZOMBIE)
             wakeup1(initproc);
         }
@@ -1023,7 +998,6 @@ thread_join(thread_t thread, void **retval)
         // Found one.
         kfree(p->kstack);
         p->kstack = 0;
-        // freevm(p->pgdir); //@ pgdir은 프로세스꺼 가져와서 쓰고 있어서 반환하면 안됨!
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
@@ -1049,7 +1023,3 @@ thread_join(thread_t thread, void **retval)
   }
 }
 
-//TODO 2023-05-27
-/* 
-  0. 주석 정리
-*/
