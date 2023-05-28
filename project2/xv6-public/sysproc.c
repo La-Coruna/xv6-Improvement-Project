@@ -107,8 +107,9 @@ sys_setmemorylimit(void)
 	result = setmemorylimit(pid,limit);
   if(result == -1){
     cprintf("set memory limit failed.\n");
+    return -1;
   }
-  return 1;
+  return 0;
 }
 
 int sys_thread_create(void)
