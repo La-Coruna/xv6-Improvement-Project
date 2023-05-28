@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 
 // function definition
 
-// skip the whitespace, so move to the front of the next word
+// skip the whitespace, so move to the front of the next word.
 void
 skipWhitespace(char ** s, char * es)
 {
@@ -142,6 +142,7 @@ alloc_cmdarg2(int type, const char *arg1, const char *arg2)
   return (struct pmgrcmd*)cmd;
 }
 
+// get one pmanager command
 int
 getPmgrCmd(char *buf, int nbuf)
 {
@@ -153,6 +154,7 @@ getPmgrCmd(char *buf, int nbuf)
   return 0;
 }
 
+// parse command and return structure pmgrcmd pointer.
 struct pmgrcmd*
 parsecmd(char *s)
 {
@@ -227,7 +229,6 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   struct cmdarg1 *cmd1;
   struct cmdarg2 *cmd2;
   
-  //TODO pid랑 limit, stacksize에 음수 들어오거나 숫자 아닌거 들어왔을 떄 예외처리 해주셈.
   int pid;
   int limit;
   char * path;
@@ -255,7 +256,10 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
   case KILL:
     cmd1 = (struct cmdarg1 *) pmgrcmd;
     pid = atoi(cmd1->arg);
-    if (kill(pid) == -1){
+    if(pid == 0){
+      printf(1,"You can't kill the process with pid:0.\n");
+    }
+    else if (kill(pid) == -1){
       printf(1,"killing process whose pid is %d failed.\n",pid);
     }
     else{
@@ -279,8 +283,10 @@ runPmgrCmd(struct pmgrcmd *pmgrcmd)
     cmd2 = (struct cmdarg2 *) pmgrcmd;
     pid = atoi(cmd2->arg1);
     limit = atoi(cmd2->arg2);
-
-    if(setmemorylimit(pid,limit) == 0)
+    if(pid == 0){
+      printf(1,"You can't set the memory limit of the process with pid:0.\n");
+    }
+    else if(setmemorylimit(pid,limit) == 0)
       printf(1,"set memory limit succeed.\n");
     break;
 
