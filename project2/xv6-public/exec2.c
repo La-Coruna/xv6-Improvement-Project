@@ -19,6 +19,7 @@ exec2(char *path, char **argv, int stacksize)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
 
+  // stack size는 1~100 범위 내로 설정이 가능하다.
   if(stacksize < 1 || stacksize > 100){
     cprintf("exec2: fail\nThe number of stack page must be in 1~100.\n");
     return -1;
