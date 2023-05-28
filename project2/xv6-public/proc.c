@@ -390,7 +390,6 @@ wait(void)
         // Found one.
         pid = p->pid;
         int total_thread_num = (p->thread_info.thread_num) + 1; // main_thread도 포함하기 때문.
-        cprintf("thread_num: %d\n", total_thread_num);
         int cnt = 0;
         for(struct proc* t = ptable.proc; t < &ptable.proc[NPROC]; t++){
           if(t->parent == curproc && t->state == ZOMBIE){
@@ -447,7 +446,6 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-//      cprintf("@start@\n");//!
       if(p->state != RUNNABLE)
         continue;
 
@@ -464,7 +462,6 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       //procdump();
-      //cprintf("@end@\n"); //!
       c->proc = 0;
     }
     release(&ptable.lock);
@@ -700,14 +697,15 @@ setmemorylimit(int pid, int limit)
     }
   }  
 
-  // If there isn't target or its memory size is already bigger than limit,
+  // If there isn't target 
+  // or its memory size is already bigger than limit,
   // then setting memory limit failed.
   if(target_p == 0 || target_p->sz > u_limit){
     release(&ptable.lock);
     return -1;
   }
   target_p->sz_limit = u_limit;
-  cprintf("%s %d %d\n", target_p->name, target_p->pid, target_p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
+  //cprintf("%s %d %d\n", target_p->name, target_p->pid, target_p->sz_limit); //프로세스의 이름, pid, 스택용 페이지의 개수, 할당받은 메모리의 크기, 메모리의 최대 제한
   
   //cprintf("set memory limit. pid: %d, limit: %d\n",pid,u_limit);
 
@@ -719,12 +717,10 @@ setmemorylimit(int pid, int limit)
 
 void
 thread_init(struct proc *p){
-  //cprintf("thread_init 시작: %d, %d\n",p->pid,p->thread_info.thread_id);
   p->thread_info.thread_id = 0;
   p->thread_info.thread_num = 0;
   p->thread_info.retval = 0;
   p->thread_info.main_thread = 0;
-  //cprintf("thread_init 끝: %d, %d\n",p->pid,p->thread_info.thread_id);
   return;
 }
 
@@ -739,7 +735,7 @@ thread_update_proc_info(struct proc * curproc)
   for(t = ptable.proc; t < &ptable.proc[NPROC]; t++){
     if(t->pid == pid && t->thread_info.thread_id != tid){
       // cprintf("tid:%d 인 thread의 정보를 update 했습니다.\n",t->thread_info.thread_id);
-      t->pgdir = curproc->pgdir;
+      //t->pgdir = curproc->pgdir;
       t->sz = curproc->sz;
       t->sz_limit = curproc->sz_limit;
       t->parent = curproc->parent;
@@ -789,7 +785,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   // cprintf("thread[pid:%d,tid:%d]의 stack 할당. 시키는 thread는 [pid:%d,tid:%d]\n",nt->pid, nt->thread_info.thread_id,main_thread->pid, main_thread->thread_info.thread_id);
   uint sz, sp, ustack[3];
   sz = PGROUNDUP(nt->sz);
-  if((sz = allocuvm(nt->pgdir, sz, sz + 2*PGSIZE)) == 0)  //@ allocuvm point
+  if((sz = allocuvm(nt->pgdir, sz, sz + 2*PGSIZE)) == 0)  
     cprintf("error: stack 할당\n");
   clearpteu(nt->pgdir, (char*)(sz - 2*PGSIZE)); //# 가드페이지 생성
   sp = sz;
