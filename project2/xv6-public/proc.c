@@ -225,7 +225,6 @@ growproc(int n)
   struct proc *curproc = myproc();
 
   acquire(&ptable.t_lock);
-// cprintf("Try to grow process. [pid: %d, tid:%d, current size: %d, demanded size: %d, limit size: %d]\n", curproc->pid, curproc->thread_info.thread_id, curproc->sz, curproc->sz + n, curproc->sz_limit);
   sz = curproc->sz;
   if(n > 0){
     if(checkmemorylimit(curproc, n)){ // check if the new size of memory exceed the memory limit of the process
@@ -235,7 +234,6 @@ growproc(int n)
       }
     }
     else {
-      // cprintf("the memory size exceed the limit. [pid: %d, demanded size: %d, limit size: %d]\n", curproc->pid, curproc->sz + n, curproc->sz_limit);
       release(&ptable.t_lock);
       return -1;
     }
@@ -247,7 +245,6 @@ growproc(int n)
   }
   curproc->sz = sz;
   thread_update_proc_info(curproc);
-  // cprintf("now the process is [pid: %d, current size: %d, limit size: %d]\n", curproc->pid, curproc->sz, curproc->sz_limit);
   release(&ptable.t_lock);
   switchuvm(curproc);
   return 0;
@@ -278,7 +275,7 @@ fork(void)
   np->sz = curproc->sz;
   np->sz_limit = curproc->sz_limit;
   np->stacknum = curproc->stacknum;
-  np->parent = curproc; //TODO main thread인 process를 가리키도록 하자.
+  np->parent = curproc;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -342,23 +339,19 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
-
+//TODO 완료 다른 thread를 부모로 가지고 있는 녀석들.... 해줘야겠지...
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
       p->parent = initproc;
-      //thread_update_proc_info(p); //@ p의 모든 thread가 parent기 바뀌도록 업데이트.
+      thread_update_proc_info(p); //@ p의 모든 thread가 parent기 바뀌도록 업데이트.
       if(p->state == ZOMBIE)
         wakeup1(initproc);
     }
   }
   release(&ptable.lock);
 
-  // # 자식 thread들을 정리해줘야함.
-  // ! exit를 호출하는 건 오로지 process(main thread)뿐.
-  // ! main thread 외에 다른 thread들은 exit가 아닌 thread_exit로 종료됨.
-  //all_thread_exit(curproc);
-  //! new design
+  // # 자식 thread들을 정리해주기 위해 zombie로 변경.
   all_child_thread_zombie(curproc);
 
   // Jump into the scheduler, never to return.
@@ -818,6 +811,7 @@ void
 thread_exit(void *retval)
 {
   struct proc *curproc = myproc();
+  struct proc * p;
   int fd;
 
   // Close all open files.
@@ -842,6 +836,18 @@ thread_exit(void *retval)
   // # join에서 받을 반환값 설정
   curproc->thread_info.retval = retval;
 
+//TODO
+  // thread가 fork를 통해 child를 갖고 있었다면
+  // Pass abandoned children to main thread. (main_thread가 살아있기 때문에 init대신 main_thread로 넘겨줌.)
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc){
+      p->parent = curproc->thread_info.main_thread;
+      thread_update_proc_info(p); 
+      if(p->state == ZOMBIE)
+        wakeup1(curproc->thread_info.main_thread);
+    }
+  }
+
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   curproc->thread_info.main_thread->thread_info.thread_num--;
@@ -853,6 +859,7 @@ thread_exit(void *retval)
 // process에서 exec를 호출하는 경우,
 // exec를 호출하는 thread를 제외하고 전부 종료하기 위한 함수
 // exec 내부에서 호출됨.
+// 인자로 전달되는 thread가 main thread가 아닐 수 있음
 void
 all_thread_exit_except_exec_thread(struct proc * thread)
 {
@@ -861,6 +868,7 @@ all_thread_exit_except_exec_thread(struct proc * thread)
   struct proc * main_thread = thread->thread_info.main_thread;
   int child_thread_num = main_thread->thread_info.thread_num;
   struct proc *p;
+  struct proc *c;
   int fd;
 
   if(child_thread_num == 0){
@@ -891,6 +899,18 @@ all_thread_exit_except_exec_thread(struct proc * thread)
       p->cwd = 0;
 
       acquire(&ptable.lock);
+
+      // thread가 fork를 통해 child를 갖고 있었다면
+      // Pass abandoned children to init.
+      for(c = ptable.proc; c < &ptable.proc[NPROC]; c++){
+        if(c->parent == p){
+          c->parent = initproc;
+          thread_update_proc_info(c); 
+          if(c->state == ZOMBIE)
+            wakeup1(initproc);
+        }
+      }
+
       //p->state = ZOMBIE;
 
       acquire(&ptable.t_lock);
@@ -920,13 +940,13 @@ all_thread_exit_except_exec_thread(struct proc * thread)
 // process에서 exit호출 시, 자식 thread를 전부 zombie로 바꾸는 함수.
 // exit 내부에서 호출 됨.
 void
-all_child_thread_zombie(struct proc * thread)
+all_child_thread_zombie(struct proc * main_thread)
 {
-  int curproc_pid = thread->pid;
-  int curproc_tid = thread->thread_info.thread_id;
-  struct proc * main_thread = thread->thread_info.main_thread;
+  int curproc_pid = main_thread->pid;
+  int curproc_tid = main_thread->thread_info.thread_id;
   int child_thread_num = main_thread->thread_info.thread_num;
   struct proc *p;
+  struct proc *c;
   int fd;
 
   if(child_thread_num == 0){
@@ -958,6 +978,16 @@ all_child_thread_zombie(struct proc * thread)
       p->cwd = 0;
 
       acquire(&ptable.lock);
+
+      // Pass abandoned children to init.
+      for(c = ptable.proc; c < &ptable.proc[NPROC]; c++){
+        if(c->parent == p){
+          c->parent = initproc;
+          thread_update_proc_info(c); 
+          if(c->state == ZOMBIE)
+            wakeup1(initproc);
+        }
+      }
       p->state = ZOMBIE;
 
       if(child_thread_num == ++cnt)
