@@ -10,6 +10,21 @@ char *argv[] = { "sh", 0 };
 int
 main(void)
 {
+
+  // # test를 위한 file 생성
+  int fd;
+
+  // Create file.txt
+  fd = open("file.txt", O_CREATE | O_WRONLY);
+  if (fd < 0) {
+    printf(1, "Error creating file.txt\n");
+  } else {
+  char *content = "Ride the W-A-V-E";
+  write(fd, content, strlen(content));
+  close(fd);
+  }
+
+  // # 아래는 original init code
   int pid, wpid;
 
   if(open("console", O_RDWR) < 0){
