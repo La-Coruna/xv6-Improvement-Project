@@ -366,13 +366,14 @@ sys_link_symbolic(void)
   
   ilock(ip_old);
   if(ip_old->type == T_DIR){ // old가 directory인지 확인.
+    //iunlockput(ip_old);
     iunlockput(ip);
     end_op();
     return -1;
   }
   ip->origin_inode = ip_old; // new의 inode가 old의 inode를 가리키도록 설정.
   iunlock(ip_old);
-
+  iupdate(ip); 
   iunlockput(ip);
 
   end_op();
@@ -387,7 +388,6 @@ sys_open(void)
   int fd, omode;
   struct file *f;
   struct inode *ip;
-   struct inode *ip_temp; //@@
 
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -405,19 +405,28 @@ sys_open(void)
       end_op();
       return -1;
     }
+
     ilock(ip);
+      cprintf("ip=%d\n",ip);
+      cprintf("ip=%d\n",ip->inum);
+      cprintf("ip->type: %d\n", ip->type);
 
     //@@
     // 열려고 한 file이 symbolic link라면,
     if (ip->type == T_SYM){
-      cprintf("티심");
-      ip_temp = ip->origin_inode;
+      struct inode * ip_temp = ip->origin_inode;
       iunlock(ip);
       ip = ip_temp;
-      ilock(ip);
      cprintf("바꾼 ip=%d\n",ip);
-      cprintf("ip->type: %d\n", ip->type);
+    cprintf("바꾼 inum=%d\n",ip->inum);
+    cprintf("바꾼 ip->type: %d\n", ip->type);
+      idup(ip);
+      ilock(ip);
     }
+    cprintf("휴 바꾸기 완료.\n");
+
+    //ilock(ip);
+
     
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
@@ -426,7 +435,7 @@ sys_open(void)
     }
   }
 
-  //@@
+  // @@
   // if (ip->type == T_SYM){
   //   ip_temp = ip->origin_inode;
   //   cprintf("ip=%d\n",ip);
