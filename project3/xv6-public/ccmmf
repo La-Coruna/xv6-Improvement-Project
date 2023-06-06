@@ -1,0 +1,33 @@
+#!/bin/bash
+# 터미널 화면 지움.
+clear
+
+
+# make 지우기
+make clean
+
+# make 명령어 실행
+make
+
+# make 명령어가 에러 코드를 반환하면 스크립트 종료
+if [ $? -ne 0 ]; then
+  echo "make failed."
+  exit 1
+fi
+
+# make 명령어 실행2
+make fs.img
+
+# make 명령어가 에러 코드를 반환하면 스크립트 종료2
+if [ $? -ne 0 ]; then
+  echo "make failed."
+  exit 1
+fi
+
+# 에러가 발생하지 않은 경우
+./bootxv6.sh
+
+if [ $? -ne 0 ]; then
+  echo "bootxv6 failed."
+  exit 1
+fi
