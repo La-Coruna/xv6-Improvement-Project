@@ -369,27 +369,131 @@ iunlockput(struct inode *ip)
 
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
+// inode를 보고, 해당 블록번호'bn'에 해당하는 물리주소를 가져오는 함수.
 static uint
 bmap(struct inode *ip, uint bn)
 {
-  uint addr, *a;
+  uint addr, *a; // addr: 물리주소
   struct buf *bp;
 
-  if(bn < NDIRECT){
-    if((addr = ip->addrs[bn]) == 0)
-      ip->addrs[bn] = addr = balloc(ip->dev);
+  // # 접근하려는 block이 direct data 안에 있는지 확인
+  if(bn < NDIRECT){ // block number가 12보다 작을 때는, direct로 전부 다 담긴다.
+    if((addr = ip->addrs[bn]) == 0) // ip->addrs[bn]을 확인하여 물리주소를 가져옴. 만약 가져온 물리주소가 0이라면, 아직 디스크랑 맵핑이 안 되어있는 것임.
+      ip->addrs[bn] = addr = balloc(ip->dev); // 매핑이 안되어 있으면 zeroed disk block을 balloc으로 가져옴.
     return addr;
   }
-  bn -= NDIRECT;
+  bn -= NDIRECT;  // direct로 넘겨주고 남을 부분만 저장
 
+  // # 접근하려는 block이 single indirect data 안에 있는지 확인
+  // Load single indirect block, allocating if necessary.
   if(bn < NINDIRECT){
-    // Load indirect block, allocating if necessary.
+
+    // direct data block 다음에 이어지는 indirect block의 주소를 가져옴.
     if((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
-    bp = bread(ip->dev, addr);
-    a = (uint*)bp->data;
-    if((addr = a[bn]) == 0){
-      a[bn] = addr = balloc(ip->dev);
+    
+    bp = bread(ip->dev, addr); // single indirect data block을 읽음.
+    a = (uint*)bp->data; // a는 single indirect data block의 data인, 실제 data block의 주소들의 집합
+    if((addr = a[bn]) == 0){ // a[bn]은 접근하려는 data block의 주소. a[bn]이 0이면 disk랑 맵핑이 안 된 것.
+      a[bn] = addr = balloc(ip->dev); // zeroed disk block을 할당해줌.
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+  bn -= NINDIRECT;
+
+  // # 접근하려는 block이 double indirect data 안에 있는지 확인
+  // Load double indirect block, allocating if necessary.
+  if(bn < NINDIRECT_D){
+    // # step 0) 각 indirect data block에서 접근할 idx 설정
+    uint double_indirect_index = bn / NINDIRECT; // double indirect block entry들 중에서 접근할 data의 index
+    uint single_indirect_index = bn % NINDIRECT; // s_indirect block의 data에서 접근할 addr의 idx
+
+    // # step 1) double indirect block 접근해서 읽기
+    // double indirect block에 접근
+    uint double_indirect_block = ip->addrs[NDIRECT + 1]; // direct 다음에 이어지는 signle indirect 다음에 이어지는 double indirect block에 접근.
+    if(double_indirect_block == 0) // double_indirect_block이 0이면 아직 mapping이 안 된 것.
+      ip->addrs[NDIRECT + 1] = double_indirect_block = balloc(ip->dev);
+
+    // double indirect block의 data 읽기
+    bp = bread(ip->dev, double_indirect_block); // double indirect block을 읽어옴.
+    uint *double_indirect_block_entries = (uint*)bp->data; // double indirect block의 data. 주소들의 모임들의, 주소들의 모임을 가지고 있음.
+
+    // # step 3) single indirect block 접근해서 읽기
+    // single indirect block에 접근
+    uint single_indirect_block = double_indirect_block_entries[double_indirect_index]; // 접근할 d_indirect속 s_indirect
+    if (single_indirect_block == 0) { // 접근하려는 block이 0이라면 새로 mapping
+      double_indirect_block_entries[double_indirect_index] = single_indirect_block = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // single indirect block의 data 읽기
+    bp = bread(ip->dev, single_indirect_block); // s_indirect block을 읽어옴.
+    uint *single_indirect_block_entries = (uint*)bp->data;
+
+    // # step 4) 접근하려고 했던 data block의 주소 가져오기
+    // single indirect block에 접근
+    if ((addr = single_indirect_block_entries[single_indirect_index]) == 0) {
+      single_indirect_block_entries[single_indirect_index] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+
+  bn -= NINDIRECT_D;
+
+  // # 접근하려는 block이 triple indirect data 안에 있는지 확인
+  // Load triple indirect block, allocating if necessary.
+  if(bn < NINDIRECT_T){
+    // # step 0) 각 indirect data block에서 접근할 idx 설정
+    uint triple_indirect_index = bn / NINDIRECT_D; // triple indirect block entry들 중에서 접근할 data의 index
+    uint double_indirect_index = (bn % NINDIRECT_D) / NINDIRECT; // triple indirect block entry들 중에서 접근할 data의 index
+    uint single_indirect_index = (bn % NINDIRECT_D) % NINDIRECT; // triple indirect block entry들 중에서 접근할 data의 index
+
+    // # step 1) triple indirect block 접근해서 읽기
+    // triple indirect block에 접근
+    uint triple_indirect_block = ip->addrs[NDIRECT + 2]; // direct 다음에 이어지는 signle indirect 다음에 이어지는 double indirect block에 접근.
+    if(triple_indirect_block == 0){ // double_indirect_block이 0이면 아직 mapping이 안 된 것.
+      ip->addrs[NDIRECT + 1] = triple_indirect_block = balloc(ip->dev);
+    }
+
+    // triple indirect block의 data 읽기
+    bp = bread(ip->dev, triple_indirect_block); // triple indirect block을 읽어옴.
+    uint *triple_indirect_block_entries = (uint*)bp->data; // triple indirect block의 data.
+
+    // # step 2) double indirect block 접근해서 읽기
+    // double indirect block에 접근
+    uint double_indirect_block = triple_indirect_block_entries[triple_indirect_index]; // 접근할 d_indirect속 s_indirect
+    if (double_indirect_block == 0) { // 접근하려는 block이 0이라면 새로 mapping
+      triple_indirect_block_entries[triple_indirect_index] = double_indirect_block = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // double indirect block의 data 읽기
+    bp = bread(ip->dev, double_indirect_block); // s_indirect block을 읽어옴.
+    uint *double_indirect_block_entries = (uint*)bp->data;
+
+    // # step 3) single indirect block 접근해서 읽기
+    // single indirect block에 접근
+    uint single_indirect_block = double_indirect_block_entries[double_indirect_index]; // 접근할 d_indirect속 s_indirect
+    if (single_indirect_block == 0) { // 접근하려는 block이 0이라면 새로 mapping
+      double_indirect_block_entries[double_indirect_index] = single_indirect_block = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // single indirect block의 data 읽기
+    bp = bread(ip->dev, double_indirect_block); // s_indirect block을 읽어옴.
+    uint *single_indirect_block_entries = (uint*)bp->data;
+
+    // # step 4) 접근하려고 했던 data block의 주소 가져오기
+    // single indirect block에 접근
+    if((addr = single_indirect_block_entries[single_indirect_index]) == 0){ 
+      single_indirect_block_entries[single_indirect_index] = addr = balloc(ip->dev); 
       log_write(bp);
     }
     brelse(bp);
