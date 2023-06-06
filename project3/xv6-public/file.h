@@ -23,6 +23,7 @@ struct inode {
   short nlink;
   uint size;
   uint addrs[NDIRECT+3]; // direct와 single,double,triple indirect
+  struct inode * origin_inode;
 };
 
 // table mapping major device number to
