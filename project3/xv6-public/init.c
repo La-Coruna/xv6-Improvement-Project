@@ -19,7 +19,7 @@ main(void)
   if (fd < 0) {
     printf(1, "Error creating file.txt\n");
   } else {
-  char *content = "Ride the W-A-V-E";
+  char *content = "Ride the W-A-V-E\n";
   write(fd, content, strlen(content));
   close(fd);
   }

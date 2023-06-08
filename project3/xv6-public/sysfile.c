@@ -75,6 +75,26 @@ sys_read(void)
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argptr(1, &p, n) < 0)
     return -1;
+
+  // # 읽으려고 한 file이 symbolic link인지 체크
+  struct inode *ip = f->ip;
+  char path_origin[100]={0};
+  ilock(ip);
+  idup(ip);
+  while (ip->type == T_SYM){
+      memset(path_origin,0,sizeof(char)*100);
+      readi(ip, path_origin, 0, sizeof(path_origin)) ;
+      iunlock(ip);
+      if((ip = namei(path_origin)) == 0){
+        cprintf("symbolic link가 훼손되었거나 가리키는 파일이 존재하지 않습니다.\n");
+        return -1;
+      }
+      ilock(ip);
+      idup(ip);
+    }
+  iunlock(ip);
+  f->ip = ip;
+
   return fileread(f, p, n);
 }
 
@@ -87,6 +107,26 @@ sys_write(void)
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argptr(1, &p, n) < 0)
     return -1;
+
+  // # 쓰려고 한 file이 symbolic link인지 체크
+  struct inode *ip = f->ip;
+  char path_origin[100]={0};
+  ilock(ip);
+  idup(ip);
+  while (ip->type == T_SYM){
+      memset(path_origin,0,sizeof(char)*100);
+      readi(ip, path_origin, 0, sizeof(path_origin)) ;
+      iunlock(ip);
+      if((ip = namei(path_origin)) == 0){
+        cprintf("symbolic link가 훼손되었거나 가리키는 파일이 존재하지 않습니다.\n");
+        return -1;
+      }
+      ilock(ip);
+      idup(ip);
+    }
+  iunlock(ip);
+  f->ip = ip;
+
   return filewrite(f, p, n);
 }
 
@@ -165,60 +205,6 @@ bad:
   return -1;
 }
 
-//@@
-// link 참고해서 만든 버전
-// Create the path new as a link to the same inode as old.
-int
-sys_link_symbolic2(void)
-{
-  char name[DIRSIZ], *new, *old;
-  struct inode *dp, *ip;
-
-  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
-    return -1;
-
-  begin_op();
-  if((ip = namei(old)) == 0){
-    end_op();
-    return -1;
-  }
-
-  ilock(ip);
-  if(ip->type == T_DIR){
-    iunlockput(ip);
-    end_op();
-    return -1;
-  }
-
-  //ip->nlink++;
-  iupdate(ip);
-  iunlock(ip);
-
-  if((dp = nameiparent(new, name)) == 0)
-    goto bad;
-  ilock(dp);
-  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
-    iunlockput(dp);
-    goto bad;
-  }
-  iunlockput(dp);
-  iput(ip);
-
-
-  end_op();
-  cprintf("ip->type: %d\n", ip->type);
-
-  return 0;
-
-bad:
-  ilock(ip);
-  ip->nlink--;
-  iupdate(ip);
-  iunlockput(ip);
-  end_op();
-  return -1;
-}
-
 // Is the directory dp empty except for "." and ".." ?
 static int
 isdirempty(struct inode *dp)
@@ -279,7 +265,7 @@ sys_unlink(void)
   }
   iunlockput(dp);
 
-  if(ip->type != T_SYM) //@@
+  if(ip->type != T_SYM) // symbolic link 만들 때 nlink 안 올려줌. 올바른 삭제 구현 위해.
     ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
@@ -307,7 +293,7 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && ip->type == T_FILE)
+    if((type == T_FILE && ip->type == T_FILE) ||(type == T_FILE && ip->type == T_SYM)  ) // 파일이 symbolic link인 경우 추가
       return ip;
     iunlockput(ip);
     return 0;
@@ -338,12 +324,10 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
-//@@
-//open 참고해서 만든 버전
+
 int
 sys_link_symbolic(void)
 {
-  //char name[DIRSIZ], *new, *old;
   char *new, *old;
   struct inode *ip, *ip_old;
 
@@ -371,7 +355,14 @@ sys_link_symbolic(void)
     end_op();
     return -1;
   }
-  ip->origin_inode = ip_old; // new의 inode가 old의 inode를 가리키도록 설정.
+  
+  if(writei(ip, old, 0, strlen(old)) != (strlen(old) )){
+    cprintf("symbolic link 생성 시 오류 발생.\n");
+    iput(ip);
+    end_op();
+    return -1;
+  }
+
   iunlock(ip_old);
   iupdate(ip); 
   iunlockput(ip);
@@ -405,28 +396,8 @@ sys_open(void)
       end_op();
       return -1;
     }
-
     ilock(ip);
-      cprintf("ip=%d\n",ip);
-      cprintf("ip=%d\n",ip->inum);
-      cprintf("ip->type: %d\n", ip->type);
-
-    //@@
-    // 열려고 한 file이 symbolic link라면,
-    if (ip->type == T_SYM){
-      struct inode * ip_temp = ip->origin_inode;
-      iunlock(ip);
-      ip = ip_temp;
-     cprintf("바꾼 ip=%d\n",ip);
-    cprintf("바꾼 inum=%d\n",ip->inum);
-    cprintf("바꾼 ip->type: %d\n", ip->type);
-      idup(ip);
-      ilock(ip);
-    }
-    cprintf("휴 바꾸기 완료.\n");
-
-    //ilock(ip);
-
+   
     
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
@@ -434,18 +405,7 @@ sys_open(void)
       return -1;
     }
   }
-
-  // @@
-  // if (ip->type == T_SYM){
-  //   ip_temp = ip->origin_inode;
-  //   cprintf("ip=%d\n",ip);
-  //   iunlock(ip);
-  //   ip = ip_temp; 
-  //   cprintf("바꾼 ip=%d\n",ip);
-  //   ilock(ip);
-  //   cprintf("ip=%d\n",ip);
-  // }
-
+ 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -458,10 +418,9 @@ sys_open(void)
 
   f->type = FD_INODE;
   f->ip = ip;
-  //f->ip = (ip->type == T_SYM) ? ip->origin_inode : ip; //@@
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
-  f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+  f->writable = (omode & O_WRONLY) || (omode & O_RDWR);  
   return fd;
 }
 
@@ -549,7 +508,33 @@ sys_exec(void)
     if(fetchstr(uarg, &argv[i]) < 0)
       return -1;
   }
-  return exec(path, argv);
+
+  struct inode * ip;
+  char path_origin[100]={0};
+  if((ip = namei(path)) != 0){
+    ilock(ip);
+    idup(ip);
+
+    while (ip->type == T_SYM){
+      memset(path_origin,0,sizeof(char)*100);
+
+
+      readi(ip, path_origin, 0, sizeof(path_origin)) ;
+      iunlock(ip);
+      if((ip = namei(path_origin)) == 0){
+        cprintf("symbolic link가 훼손되었거나 가리키는 파일이 존재하지 않습니다.\n");
+        return -1;
+      }
+      ilock(ip);
+      idup(ip);
+    }
+    iunlock(ip);
+  }
+
+  if(strlen(path_origin)==0)
+    return exec(path, argv);
+  else
+    return exec(path_origin, argv);
 }
 
 int
